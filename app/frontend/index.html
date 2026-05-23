@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>本地听书</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="library">
+        <div class="brand">
+          <div>
+            <p class="eyebrow">Local Audiobook</p>
+            <h1>本地听书</h1>
+          </div>
+          <div class="header-actions">
+            <button id="toggleLibrary" class="icon-button" title="收起书库" aria-label="收起书库">‹</button>
+            <button id="refreshBooks" class="icon-button" title="刷新书库" aria-label="刷新书库">↻</button>
+          </div>
+        </div>
+
+        <div class="library-body">
+          <label class="file-picker">
+            <input id="fileInput" type="file" accept=".txt,.md,.epub" />
+            <span>导入书籍</span>
+          </label>
+
+          <form id="pathForm" class="path-form">
+            <input id="pathInput" type="text" placeholder="搜索书名" />
+            <button type="submit">搜索</button>
+          </form>
+
+          <div id="bookList" class="book-list" aria-label="书库列表"></div>
+        </div>
+      </aside>
+
+      <section class="player">
+        <header class="player-header">
+          <div>
+            <p id="statusText" class="eyebrow">请选择或导入一本书</p>
+            <div class="title-row">
+              <h2 id="bookTitle">未选择书籍</h2>
+            </div>
+            <p id="chapterTitle" class="chapter-title">章节会显示在这里</p>
+          </div>
+          <div class="settings">
+            <label>
+              声音
+              <select id="voiceSelect"></select>
+            </label>
+            <label>
+              语速
+              <select id="rateInput">
+                <option value="-25%">0.75x</option>
+                <option value="+0%" selected>1x</option>
+                <option value="+25%">1.25x</option>
+                <option value="+50%">1.5x</option>
+                <option value="+100%">2x</option>
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div class="chapter-popover" id="chapterPopover" hidden>
+          <div class="panel-title">章节</div>
+          <div id="chapterList" class="chapter-list chapter-body"></div>
+        </div>
+
+        <div class="workbench">
+          <article class="reader">
+            <div id="paragraphMeta" class="paragraph-meta">第 0 页 / 共 0 页</div>
+            <div id="paragraphPreview" class="paragraph-preview">导入书籍后，这里会显示当前段落文本。</div>
+
+            <audio id="audio" preload="metadata"></audio>
+
+            <div class="progress-row">
+              <span id="currentTime">00:00</span>
+              <input id="seekBar" type="range" min="0" max="1000" value="0" />
+              <span id="durationTime">00:00</span>
+            </div>
+
+            <div class="controls" aria-label="播放控制">
+              <button id="prevChapter">上一章</button>
+              <button id="prevParagraph">上一页</button>
+              <button id="playPause" class="primary">播放</button>
+              <button id="nextParagraph">下一页</button>
+              <button id="nextChapter">下一章</button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
