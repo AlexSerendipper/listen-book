@@ -253,7 +253,7 @@ function splitSentences(text) {
   return sentences.length ? sentences : [{ text, start: 0, end: String(text).length }];
 }
 
-function playFromSentence(index) {
+async function playFromSentence(index) {
   const sentence = state.sentences[index];
   const timing = state.sentenceTimings.find((item) => item.sentence_index === sentence?.timingIndex);
   const textLength = state.sentences.at(-1)?.end || 1;
@@ -262,7 +262,12 @@ function playFromSentence(index) {
   state.activeSentenceIndex = index;
   el.audio.currentTime = timing.start_ms / 1000;
   highlightSentence(index);
-  el.audio.play();
+  try {
+    await el.audio.play();
+  } catch (error) {
+    alert(`播放失败：${error.message}`);
+  }
+  updatePlayButton();
 }
 
 function highlightSentence(index) {
@@ -679,7 +684,11 @@ el.rateInput.addEventListener("change", async () => {
   await reloadCurrentAudioWithSettings();
 });
 el.audio.addEventListener("timeupdate", updateProgress);
-el.audio.addEventListener("pause", saveProgress);
+el.audio.addEventListener("play", updatePlayButton);
+el.audio.addEventListener("pause", async () => {
+  await saveProgress();
+  updatePlayButton();
+});
 el.audio.addEventListener("ended", () => jumpToParagraph(state.paragraphIndex + 1, true));
 window.addEventListener("beforeunload", saveProgress);
 setInterval(saveProgress, 7000);
