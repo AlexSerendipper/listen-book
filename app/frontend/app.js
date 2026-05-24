@@ -177,13 +177,17 @@ function renderCurrent() {
   renderPanels();
 }
 
-function updatePlayButton() {
+function updatePlayButton(forcePlaying = null) {
   if (state.loadingAudio) {
     el.playPause.textContent = "正在准备...";
     el.playPause.disabled = true;
     return;
   }
   el.playPause.disabled = !state.bookId;
+  if (typeof forcePlaying === "boolean") {
+    el.playPause.textContent = forcePlaying ? "暂停" : "播放";
+    return;
+  }
   el.playPause.textContent = el.audio.paused ? "播放" : "暂停";
 }
 
@@ -262,9 +266,11 @@ async function playFromSentence(index) {
   state.activeSentenceIndex = index;
   el.audio.currentTime = timing.start_ms / 1000;
   highlightSentence(index);
+  updatePlayButton(true);
   try {
     await el.audio.play();
   } catch (error) {
+    updatePlayButton(false);
     alert(`播放失败：${error.message}`);
   }
   updatePlayButton();
@@ -685,6 +691,7 @@ el.rateInput.addEventListener("change", async () => {
 });
 el.audio.addEventListener("timeupdate", updateProgress);
 el.audio.addEventListener("play", updatePlayButton);
+el.audio.addEventListener("playing", () => updatePlayButton(true));
 el.audio.addEventListener("pause", async () => {
   await saveProgress();
   updatePlayButton();
