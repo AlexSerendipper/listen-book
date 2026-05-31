@@ -8,12 +8,9 @@
   --accent-dark: #0b4f49;
   --warn: #b45309;
   --shadow: 0 18px 50px rgba(38, 32, 22, 0.12);
-  --player-padding-y: 60px;
-  --player-header-height: 86px;
-  --reader-padding-y: 48px;
-  --reader-top-height: 34px;
-  --reader-gap-total: 54px;
-  --reader-controls-height: 78px;
+  --reader-top-height: 40px;
+  --reader-progress-height: 24px;
+  --reader-controls-height: 40px;
 }
 
 * {
@@ -419,16 +416,13 @@ h2 {
   min-height: 0;
   padding: 24px;
   display: grid;
-  grid-template-rows:
-    var(--reader-top-height)
-    minmax(0, calc(100vh - var(--player-padding-y) - var(--player-header-height) - var(--reader-padding-y) - var(--reader-top-height) - var(--reader-gap-total) - var(--reader-controls-height)))
-    auto
-    auto;
+  grid-template-rows: var(--reader-top-height) minmax(0, 1fr) var(--reader-progress-height) var(--reader-controls-height);
   gap: 18px;
   overflow: hidden;
 }
 
 .reader-top {
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -449,9 +443,9 @@ h2 {
 }
 
 .paragraph-preview {
-  height: calc(100vh - var(--player-padding-y) - var(--player-header-height) - var(--reader-padding-y) - var(--reader-top-height) - var(--reader-gap-total) - var(--reader-controls-height));
+  height: 100%;
   min-height: 0;
-  max-height: calc(100vh - var(--player-padding-y) - var(--player-header-height) - var(--reader-padding-y) - var(--reader-top-height) - var(--reader-gap-total) - var(--reader-controls-height));
+  max-height: 100%;
   overflow: hidden;
   white-space: pre-wrap;
   font-size: 21px;
@@ -516,6 +510,8 @@ h2 {
 }
 
 .progress-row {
+  height: var(--reader-progress-height);
+  min-height: 0;
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr) 54px;
   gap: 12px;
@@ -530,9 +526,16 @@ h2 {
 }
 
 .controls {
+  height: var(--reader-controls-height);
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+}
+
+.controls button {
+  height: var(--reader-controls-height);
+  min-height: 0;
 }
 
 .controls .primary {
