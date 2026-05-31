@@ -147,7 +147,7 @@ function renderChapters() {
     .map((chapter) => {
       const startPage = getChapterStartPage(chapter.chapter_index);
       return `
-        <button class="chapter-item ${chapter.chapter_index === state.chapterIndex ? "active" : ""}" data-index="${chapter.chapter_index}">
+        <button class="chapter-item ${chapter.chapter_index === state.previewChapterIndex ? "active" : ""}" data-index="${chapter.chapter_index}">
           <strong>${escapeHtml(chapter.title || `第 ${chapter.chapter_index + 1} 章`)}</strong>
           <span>第 ${startPage} 页起</span>
         </button>
@@ -159,7 +159,7 @@ function renderChapters() {
     button.addEventListener("click", () => {
       state.chapterPopoverOpen = false;
       renderPanels();
-      jumpToChapter(Number(button.dataset.index));
+      previewJumpToChapter(Number(button.dataset.index));
     });
   });
 }
@@ -574,6 +574,12 @@ async function previewJumpToParagraph(index) {
   renderCurrent();
 }
 
+async function previewJumpToChapter(index) {
+  if (!state.bookId || !state.chapters.some((chapter) => chapter.chapter_index === index)) return;
+  state.previewParagraphIndex = 0;
+  await loadPreviewParagraphs(index);
+}
+
 function backToCurrentPage() {
   state.previewChapterIndex = state.chapterIndex;
   state.previewParagraphIndex = state.paragraphIndex;
@@ -671,7 +677,7 @@ async function openBookChapters(bookId, anchor) {
     .map((chapter) => {
       const startPage = getChapterStartPageFor(chapters, chapter.chapter_index);
       return `
-        <button class="chapter-item ${bookId === state.bookId && chapter.chapter_index === state.chapterIndex ? "active" : ""}" data-index="${chapter.chapter_index}">
+        <button class="chapter-item ${bookId === state.bookId && chapter.chapter_index === state.previewChapterIndex ? "active" : ""}" data-index="${chapter.chapter_index}">
           <strong>${escapeHtml(chapter.title || `第 ${chapter.chapter_index + 1} 章`)}</strong>
           <span>第 ${startPage} 页起</span>
         </button>
@@ -684,7 +690,7 @@ async function openBookChapters(bookId, anchor) {
         await selectBook(bookId);
       }
       state.chapterPopoverOpen = false;
-      await jumpToChapter(Number(button.dataset.index));
+      await previewJumpToChapter(Number(button.dataset.index));
     });
   });
   renderPanels();
@@ -777,8 +783,8 @@ el.playPause.addEventListener("click", async () => {
   }
   updatePlayButton();
 });
-el.prevChapter.addEventListener("click", () => jumpToChapter(state.chapterIndex - 1));
-el.nextChapter.addEventListener("click", () => jumpToChapter(state.chapterIndex + 1));
+el.prevChapter.addEventListener("click", () => previewJumpToChapter(state.previewChapterIndex - 1));
+el.nextChapter.addEventListener("click", () => previewJumpToChapter(state.previewChapterIndex + 1));
 el.prevParagraph.addEventListener("click", () => previewJumpToParagraph(state.previewParagraphIndex - 1));
 el.nextParagraph.addEventListener("click", () => previewJumpToParagraph(state.previewParagraphIndex + 1));
 el.backToCurrentPage.addEventListener("click", backToCurrentPage);
