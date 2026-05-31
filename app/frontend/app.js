@@ -15,9 +15,9 @@ const READER_EPUB_OVERRIDES = `
   line-height: 1.25 !important;
 }
 .paragraph-preview .epub-fragment p {
-  margin-top: 0.35em !important;
-  margin-bottom: 0.35em !important;
-  line-height: 1.45 !important;
+  margin-top: 0.22em !important;
+  margin-bottom: 0.22em !important;
+  line-height: 1.38 !important;
 }
 .paragraph-preview .epub-fragment .shuming,
 .paragraph-preview .epub-fragment .juzhong3 {
@@ -28,9 +28,16 @@ const READER_EPUB_OVERRIDES = `
 .paragraph-preview .epub-fragment .roundsolid,
 .paragraph-preview .epub-fragment .solidtb,
 .paragraph-preview .epub-fragment .solidorange {
-  margin: 0.75em 0 !important;
-  padding: 0.65em 1.6em !important;
+  margin: 0.45em 0 !important;
+  padding: 0.35em 1.25em !important;
   border-radius: 12px !important;
+}
+.paragraph-preview .epub-fragment .roundsolid p,
+.paragraph-preview .epub-fragment .solidtb p,
+.paragraph-preview .epub-fragment .solidorange p {
+  margin-top: 0.12em !important;
+  margin-bottom: 0.12em !important;
+  line-height: 1.32 !important;
 }
 .paragraph-preview .epub-fragment .chubanshe {
   position: static !important;
