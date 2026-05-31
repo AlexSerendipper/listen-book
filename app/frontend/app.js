@@ -2,9 +2,12 @@ const state = {
   books: [],
   chapters: [],
   paragraphs: [],
+  previewParagraphs: [],
   bookId: null,
   chapterIndex: 0,
   paragraphIndex: 0,
+  previewChapterIndex: 0,
+  previewParagraphIndex: 0,
   voice: "zh-CN-XiaoxiaoNeural",
   rate: "+0%",
   volume: "+0%",
@@ -39,6 +42,7 @@ const el = {
   chapterList: document.querySelector("#chapterList"),
   paragraphMeta: document.querySelector("#paragraphMeta"),
   paragraphPreview: document.querySelector("#paragraphPreview"),
+  backToCurrentPage: document.querySelector("#backToCurrentPage"),
   audio: document.querySelector("#audio"),
   seekBar: document.querySelector("#seekBar"),
   currentTime: document.querySelector("#currentTime"),
@@ -162,15 +166,16 @@ function renderChapters() {
 
 function renderCurrent() {
   const book = state.books.find((item) => item.id === state.bookId);
-  const chapter = state.chapters.find((item) => item.chapter_index === state.chapterIndex);
-  const paragraph = state.paragraphs[state.paragraphIndex];
-  const currentPage = getCurrentPageNumber();
+  const chapter = state.chapters.find((item) => item.chapter_index === state.previewChapterIndex);
+  const paragraph = state.previewParagraphs[state.previewParagraphIndex];
+  const currentPage = getPageNumber(state.previewChapterIndex, state.previewParagraphIndex);
   const totalPages = getTotalPages();
 
   el.bookTitle.textContent = book?.title || "未选择书籍";
   el.chapterTitle.textContent = chapter?.title || "章节会显示在这里";
   el.paragraphMeta.textContent = totalPages ? `第 ${currentPage} 页 / 共 ${totalPages} 页` : "第 0 页 / 共 0 页";
   renderParagraph(paragraph?.text || "当前章节暂无内容。");
+  el.backToCurrentPage.disabled = isPreviewCurrentPage();
   updatePlayButton();
   renderBooks();
   renderChapters();
@@ -207,14 +212,16 @@ function renderPanels() {
 
 function renderParagraph(text) {
   state.sentences = splitSentences(text);
-  applySentenceTimings();
+  if (isPreviewCurrentPage()) {
+    applySentenceTimings();
+  }
   state.activeSentenceIndex = Math.min(state.activeSentenceIndex, Math.max(0, state.sentences.length - 1));
   el.paragraphPreview.innerHTML = state.sentences
     .map(
       (sentence, index) => {
-        const interactive = sentence.timingIndex !== undefined;
+        const interactive = sentence.timingIndex !== undefined || !isPreviewCurrentPage();
         const classes = ["sentence", interactive ? "timed" : "untimed"];
-        if (index === state.activeSentenceIndex && interactive) classes.push("active");
+        if (index === state.activeSentenceIndex && sentence.timingIndex !== undefined && isPreviewCurrentPage()) classes.push("active");
         return `<span class="${classes.join(" ")}" data-index="${index}">${escapeHtml(sentence.text)}</span>`;
       },
     )
@@ -240,7 +247,15 @@ function getChapterStartPage(chapterIndex) {
 }
 
 function getCurrentPageNumber() {
-  return getChapterStartPage(state.chapterIndex) + state.paragraphIndex;
+  return getPageNumber(state.chapterIndex, state.paragraphIndex);
+}
+
+function getPageNumber(chapterIndex, paragraphIndex) {
+  return getChapterStartPage(chapterIndex) + paragraphIndex;
+}
+
+function isPreviewCurrentPage() {
+  return state.previewChapterIndex === state.chapterIndex && state.previewParagraphIndex === state.paragraphIndex;
 }
 
 function splitSentences(text) {
@@ -258,13 +273,22 @@ function splitSentences(text) {
 }
 
 async function playFromSentence(index) {
+  const wasPreviewingOtherPage = !isPreviewCurrentPage();
+  if (wasPreviewingOtherPage) {
+    await switchPlaybackToPreviewPage();
+  }
   const sentence = state.sentences[index];
   const timing = state.sentenceTimings.find((item) => item.sentence_index === sentence?.timingIndex);
   const textLength = state.sentences.at(-1)?.end || 1;
   if (!sentence || !el.audio.duration) return;
-  if (!timing) return;
   state.activeSentenceIndex = index;
-  el.audio.currentTime = timing.start_ms / 1000;
+  if (timing) {
+    el.audio.currentTime = timing.start_ms / 1000;
+  } else if (wasPreviewingOtherPage) {
+    el.audio.currentTime = (sentence.start / textLength) * el.audio.duration;
+  } else {
+    return;
+  }
   highlightSentence(index);
   updatePlayButton(true);
   try {
@@ -274,6 +298,16 @@ async function playFromSentence(index) {
     alert(`播放失败：${error.message}`);
   }
   updatePlayButton();
+}
+
+async function switchPlaybackToPreviewPage() {
+  await saveProgress();
+  state.chapterIndex = state.previewChapterIndex;
+  state.paragraphIndex = state.previewParagraphIndex;
+  state.paragraphs = state.previewParagraphs;
+  state.activeSentenceIndex = 0;
+  await loadAudio(0, false);
+  await saveProgress();
 }
 
 function highlightSentence(index) {
@@ -297,17 +331,33 @@ async function selectBook(bookId) {
   state.volume = progress.volume || state.volume;
   state.chapterIndex = progress.chapter_index || 0;
   state.paragraphIndex = progress.paragraph_index || 0;
+  state.previewChapterIndex = state.chapterIndex;
+  state.previewParagraphIndex = state.paragraphIndex;
   syncSettings();
-  await loadParagraphs(state.chapterIndex);
+  await loadParagraphs(state.chapterIndex, true);
   await loadAudio(progress.audio_position_ms || 0);
   setStatus("就绪");
 }
 
-async function loadParagraphs(chapterIndex) {
+async function loadParagraphs(chapterIndex, syncPreview = true) {
   state.paragraphs = await api(`/api/books/${state.bookId}/paragraphs?chapter_index=${chapterIndex}`);
   state.chapterIndex = chapterIndex;
   if (state.paragraphIndex >= state.paragraphs.length) {
     state.paragraphIndex = 0;
+  }
+  if (syncPreview) {
+    state.previewChapterIndex = state.chapterIndex;
+    state.previewParagraphIndex = state.paragraphIndex;
+    state.previewParagraphs = state.paragraphs;
+  }
+  renderCurrent();
+}
+
+async function loadPreviewParagraphs(chapterIndex) {
+  state.previewParagraphs = await api(`/api/books/${state.bookId}/paragraphs?chapter_index=${chapterIndex}`);
+  state.previewChapterIndex = chapterIndex;
+  if (state.previewParagraphIndex >= state.previewParagraphs.length) {
+    state.previewParagraphIndex = 0;
   }
   renderCurrent();
 }
@@ -332,33 +382,37 @@ async function loadAudio(positionMs = 0, autoplay = false) {
   });
   el.audio.src = `/api/books/${state.bookId}/audio?${params.toString()}`;
   el.audio.load();
-  el.audio.onloadedmetadata = async () => {
-    el.audio.currentTime = Math.min(positionMs / 1000, el.audio.duration || 0);
-    await loadSentenceTimings();
-    updateProgress();
-    state.audioReady = true;
-    state.loadingAudio = false;
-    setStatus("就绪");
-    updatePlayButton();
-    if (state.pendingAutoplay) {
-      state.pendingAutoplay = false;
-      try {
-        await el.audio.play();
-      } catch (error) {
-        alert(`播放失败：${error.message}`);
-      }
-      updatePlayButton();
-    }
-  };
-  el.audio.onerror = () => {
-    state.loadingAudio = false;
-    state.pendingAutoplay = false;
-    state.audioReady = false;
-    setStatus("音频准备失败");
-    updatePlayButton();
-    alert("音频准备失败，请稍后重试。");
-  };
   renderCurrent();
+  return new Promise((resolve, reject) => {
+    el.audio.onloadedmetadata = async () => {
+      el.audio.currentTime = Math.min(positionMs / 1000, el.audio.duration || 0);
+      await loadSentenceTimings();
+      updateProgress();
+      state.audioReady = true;
+      state.loadingAudio = false;
+      setStatus("就绪");
+      updatePlayButton();
+      if (state.pendingAutoplay) {
+        state.pendingAutoplay = false;
+        try {
+          await el.audio.play();
+        } catch (error) {
+          alert(`播放失败：${error.message}`);
+        }
+        updatePlayButton();
+      }
+      resolve();
+    };
+    el.audio.onerror = () => {
+      state.loadingAudio = false;
+      state.pendingAutoplay = false;
+      state.audioReady = false;
+      setStatus("音频准备失败");
+      updatePlayButton();
+      alert("音频准备失败，请稍后重试。");
+      reject(new Error("音频准备失败"));
+    };
+  });
 }
 
 async function loadSentenceTimings() {
@@ -372,10 +426,14 @@ async function loadSentenceTimings() {
   });
   try {
     state.sentenceTimings = await api(`/api/books/${state.bookId}/sentence-timings?${params.toString()}`);
-    renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+    if (isPreviewCurrentPage()) {
+      renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+    }
   } catch {
     state.sentenceTimings = [];
-    renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+    if (isPreviewCurrentPage()) {
+      renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+    }
   }
 }
 
@@ -451,33 +509,76 @@ async function saveProgress() {
   });
 }
 
-async function jumpToChapter(index, autoplay = false) {
+async function jumpToChapter(index, autoplay = false, syncPreview = true) {
   if (index < 0 || index >= state.chapters.length) return;
   await saveProgress();
   state.paragraphIndex = 0;
   state.activeSentenceIndex = 0;
-  await loadParagraphs(index);
+  await loadParagraphs(index, syncPreview);
   await loadAudio(0, autoplay);
   await saveProgress();
 }
 
 async function jumpToParagraph(index, autoplay = false) {
+  const syncPreview = isPreviewCurrentPage();
   if (index < 0) {
-    await jumpToChapter(state.chapterIndex - 1, autoplay);
+    await jumpToChapter(state.chapterIndex - 1, autoplay, syncPreview);
     state.paragraphIndex = Math.max(0, state.paragraphs.length - 1);
+    if (syncPreview) {
+      state.previewChapterIndex = state.chapterIndex;
+      state.previewParagraphIndex = state.paragraphIndex;
+      state.previewParagraphs = state.paragraphs;
+    }
     await loadAudio(0, autoplay);
     return;
   }
   if (index >= state.paragraphs.length) {
-    await jumpToChapter(state.chapterIndex + 1, autoplay);
+    await jumpToChapter(state.chapterIndex + 1, autoplay, syncPreview);
     return;
   }
   await saveProgress();
   state.paragraphIndex = index;
   state.activeSentenceIndex = 0;
+  if (syncPreview) {
+    state.previewChapterIndex = state.chapterIndex;
+    state.previewParagraphIndex = state.paragraphIndex;
+    state.previewParagraphs = state.paragraphs;
+  }
   renderCurrent();
   await loadAudio(0, autoplay);
   await saveProgress();
+}
+
+async function previewJumpToParagraph(index) {
+  if (!state.bookId) return;
+  if (index < 0) {
+    const previousChapter = [...state.chapters]
+      .reverse()
+      .find((chapter) => chapter.chapter_index < state.previewChapterIndex);
+    if (!previousChapter) return;
+    const paragraphs = await api(`/api/books/${state.bookId}/paragraphs?chapter_index=${previousChapter.chapter_index}`);
+    state.previewChapterIndex = previousChapter.chapter_index;
+    state.previewParagraphs = paragraphs;
+    state.previewParagraphIndex = Math.max(0, paragraphs.length - 1);
+    renderCurrent();
+    return;
+  }
+  if (index >= state.previewParagraphs.length) {
+    const nextChapter = state.chapters.find((chapter) => chapter.chapter_index > state.previewChapterIndex);
+    if (!nextChapter) return;
+    state.previewParagraphIndex = 0;
+    await loadPreviewParagraphs(nextChapter.chapter_index);
+    return;
+  }
+  state.previewParagraphIndex = index;
+  renderCurrent();
+}
+
+function backToCurrentPage() {
+  state.previewChapterIndex = state.chapterIndex;
+  state.previewParagraphIndex = state.paragraphIndex;
+  state.previewParagraphs = state.paragraphs;
+  renderCurrent();
 }
 
 function updateProgress() {
@@ -519,7 +620,7 @@ function getNextPageTarget() {
 }
 
 function updateSentenceHighlight(current, duration) {
-  if (!duration || !state.sentences.length) return;
+  if (!duration || !state.sentences.length || !isPreviewCurrentPage()) return;
   if (state.sentenceTimings.length) {
     const currentMs = current * 1000;
     const timingIndex = state.sentenceTimings.findIndex((timing, timingListIndex) => {
@@ -602,8 +703,11 @@ async function deleteBook(bookId) {
     state.bookId = null;
     state.chapters = [];
     state.paragraphs = [];
+    state.previewParagraphs = [];
     state.chapterIndex = 0;
     state.paragraphIndex = 0;
+    state.previewChapterIndex = 0;
+    state.previewParagraphIndex = 0;
     state.sentences = [];
     state.sentenceTimings = [];
     state.audioReady = false;
@@ -675,8 +779,9 @@ el.playPause.addEventListener("click", async () => {
 });
 el.prevChapter.addEventListener("click", () => jumpToChapter(state.chapterIndex - 1));
 el.nextChapter.addEventListener("click", () => jumpToChapter(state.chapterIndex + 1));
-el.prevParagraph.addEventListener("click", () => jumpToParagraph(state.paragraphIndex - 1));
-el.nextParagraph.addEventListener("click", () => jumpToParagraph(state.paragraphIndex + 1));
+el.prevParagraph.addEventListener("click", () => previewJumpToParagraph(state.previewParagraphIndex - 1));
+el.nextParagraph.addEventListener("click", () => previewJumpToParagraph(state.previewParagraphIndex + 1));
+el.backToCurrentPage.addEventListener("click", backToCurrentPage);
 el.seekBar.addEventListener("input", () => {
   if (!el.audio.duration) return;
   el.audio.currentTime = (Number(el.seekBar.value) / 1000) * el.audio.duration;

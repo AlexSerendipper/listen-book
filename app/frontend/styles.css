@@ -382,6 +382,26 @@ h2 {
   gap: 18px;
 }
 
+.reader-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.return-page {
+  min-height: 34px;
+  border-color: rgba(15, 118, 110, 0.34);
+  color: var(--accent-dark);
+  background: rgba(255, 253, 246, 0.82);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.return-page:disabled {
+  visibility: hidden;
+}
+
 .paragraph-preview {
   height: 100%;
   min-height: 420px;
