@@ -322,7 +322,7 @@ h2 {
 
 .settings {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 110px;
+  grid-template-columns: minmax(160px, 1fr) 110px 124px;
   gap: 10px;
 }
 
@@ -331,6 +331,22 @@ h2 {
   gap: 6px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.overlay-toggle {
+  align-self: end;
+  min-height: 40px;
+  border-color: rgba(15, 118, 110, 0.34);
+  background: #fffdf6;
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.overlay-toggle.active {
+  border-color: var(--accent);
+  background: #0f766e;
+  color: white;
 }
 
 .workbench {

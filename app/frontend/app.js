@@ -19,10 +19,16 @@ const state = {
   chapterPopoverBookId: null,
   chapterAnchorRect: null,
   sentences: [],
+  playbackSentences: [],
   sentenceTimings: [],
   activeSentenceIndex: 0,
+  playbackSentenceIndex: 0,
   searchQuery: "",
   prefetchedNext: false,
+  overlayRunning: false,
+  lastPlayerStateSync: 0,
+  pollingPlayerCommand: false,
+  pendingStartPlaybackCommand: false,
 };
 
 const el = {
@@ -39,6 +45,7 @@ const el = {
   chapterTitle: document.querySelector("#chapterTitle"),
   voiceSelect: document.querySelector("#voiceSelect"),
   rateInput: document.querySelector("#rateInput"),
+  overlayToggle: document.querySelector("#overlayToggle"),
   chapterList: document.querySelector("#chapterList"),
   paragraphMeta: document.querySelector("#paragraphMeta"),
   paragraphPreview: document.querySelector("#paragraphPreview"),
@@ -71,6 +78,11 @@ async function api(path, options = {}) {
 
 function setStatus(text) {
   el.statusText.textContent = text;
+}
+
+function updateOverlayButton() {
+  el.overlayToggle.textContent = state.overlayRunning ? "关闭悬浮窗" : "打开悬浮窗";
+  el.overlayToggle.classList.toggle("active", state.overlayRunning);
 }
 
 function formatTime(value) {
@@ -214,8 +226,11 @@ function renderParagraph(text) {
   state.sentences = splitSentences(text);
   if (isPreviewCurrentPage()) {
     applySentenceTimings();
+    state.playbackSentences = state.sentences.map((sentence) => ({ ...sentence }));
   }
-  state.activeSentenceIndex = Math.min(state.activeSentenceIndex, Math.max(0, state.sentences.length - 1));
+  state.activeSentenceIndex = isPreviewCurrentPage()
+    ? Math.min(state.playbackSentenceIndex, Math.max(0, state.sentences.length - 1))
+    : Math.min(state.activeSentenceIndex, Math.max(0, state.sentences.length - 1));
   el.paragraphPreview.innerHTML = state.sentences
     .map(
       (sentence, index) => {
@@ -281,6 +296,7 @@ async function playFromSentence(index) {
   const timing = state.sentenceTimings.find((item) => item.sentence_index === sentence?.timingIndex);
   const textLength = state.sentences.at(-1)?.end || 1;
   if (!sentence || !el.audio.duration) return;
+  state.playbackSentenceIndex = index;
   state.activeSentenceIndex = index;
   if (timing) {
     el.audio.currentTime = timing.start_ms / 1000;
@@ -311,6 +327,8 @@ async function switchPlaybackToPreviewPage() {
 }
 
 function highlightSentence(index) {
+  state.playbackSentenceIndex = index;
+  if (!isPreviewCurrentPage()) return;
   state.activeSentenceIndex = index;
   document.querySelectorAll(".sentence").forEach((node) => {
     node.classList.toggle("active", Number(node.dataset.index) === index);
@@ -368,7 +386,9 @@ async function loadAudio(positionMs = 0, autoplay = false) {
   state.pendingAutoplay = autoplay;
   state.audioReady = false;
   state.activeSentenceIndex = 0;
+  state.playbackSentenceIndex = 0;
   state.sentenceTimings = [];
+  state.playbackSentences = [];
   state.prefetchedNext = false;
   setStatus("正在准备音频");
   updatePlayButton();
@@ -392,6 +412,17 @@ async function loadAudio(positionMs = 0, autoplay = false) {
       state.loadingAudio = false;
       setStatus("就绪");
       updatePlayButton();
+      syncPlayerState(true);
+      if (state.pendingStartPlaybackCommand) {
+        state.pendingStartPlaybackCommand = false;
+        try {
+          await el.audio.play();
+        } catch {
+          // Browser autoplay policy may require a user gesture on the page.
+        }
+        updatePlayButton();
+        syncPlayerState(true);
+      }
       if (state.pendingAutoplay) {
         state.pendingAutoplay = false;
         try {
@@ -400,6 +431,7 @@ async function loadAudio(positionMs = 0, autoplay = false) {
           alert(`播放失败：${error.message}`);
         }
         updatePlayButton();
+        syncPlayerState(true);
       }
       resolve();
     };
@@ -409,6 +441,7 @@ async function loadAudio(positionMs = 0, autoplay = false) {
       state.audioReady = false;
       setStatus("音频准备失败");
       updatePlayButton();
+      syncPlayerState(true);
       alert("音频准备失败，请稍后重试。");
       reject(new Error("音频准备失败"));
     };
@@ -485,6 +518,18 @@ async function startPlayback() {
     alert(`播放失败：${error.message}`);
   }
   updatePlayButton();
+}
+
+async function togglePlayback() {
+  if (!state.bookId || state.loadingAudio) return;
+  if (el.audio.paused) {
+    await startPlayback();
+  } else {
+    el.audio.pause();
+    await saveProgress();
+  }
+  updatePlayButton();
+  syncPlayerState(true);
 }
 
 function syncSettings() {
@@ -595,6 +640,7 @@ function updateProgress() {
   el.seekBar.value = duration ? Math.floor((current / duration) * 1000) : 0;
   updateSentenceHighlight(current, duration);
   maybePrefetchNextPage(current, duration);
+  syncPlayerState();
 }
 
 function maybePrefetchNextPage(current, duration) {
@@ -625,8 +671,87 @@ function getNextPageTarget() {
   return { chapterIndex: nextChapter.chapter_index, paragraphIndex: 0 };
 }
 
+function getPlayerStatePayload() {
+  const sentences = state.playbackSentences.length ? state.playbackSentences : state.sentences;
+  const currentSentence = sentences[state.playbackSentenceIndex]?.text?.trim() || "";
+  return {
+    book_title: "",
+    chapter_title: "",
+    page_label: "",
+    current_sentence: currentSentence,
+    next_sentence: "",
+    is_playing: Boolean(state.bookId && state.audioReady && !el.audio.paused),
+  };
+}
+
+function syncPlayerState(force = false) {
+  const now = Date.now();
+  if (!force && now - state.lastPlayerStateSync < 300) return;
+  state.lastPlayerStateSync = now;
+  fetch("/api/player/state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(getPlayerStatePayload()),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+async function refreshOverlayStatus() {
+  try {
+    const data = await api("/api/overlay/status");
+    state.overlayRunning = Boolean(data.running);
+    updateOverlayButton();
+  } catch {
+    state.overlayRunning = false;
+    updateOverlayButton();
+  }
+}
+
+async function toggleOverlay() {
+  el.overlayToggle.disabled = true;
+  try {
+    const path = state.overlayRunning ? "/api/overlay/stop" : "/api/overlay/start";
+    const data = await api(path, { method: "POST" });
+    state.overlayRunning = Boolean(data.running);
+    updateOverlayButton();
+  } catch (error) {
+    setStatus(`悬浮窗操作失败：${error.message}`);
+  } finally {
+    el.overlayToggle.disabled = false;
+  }
+}
+
+async function pollPlayerCommand() {
+  if (state.pollingPlayerCommand) return;
+  state.pollingPlayerCommand = true;
+  try {
+    const data = await api("/api/player/command");
+    if (data.command === "toggle_play") {
+      await togglePlayback();
+    } else if (data.command === "start_playback") {
+      await startPlaybackFromCommand();
+    }
+  } catch {
+    // The command channel is best-effort while the local service is running.
+  } finally {
+    state.pollingPlayerCommand = false;
+  }
+}
+
+async function startPlaybackFromCommand() {
+  if (!state.bookId || state.loadingAudio) {
+    state.pendingStartPlaybackCommand = true;
+    return;
+  }
+  state.pendingStartPlaybackCommand = false;
+  if (el.audio.paused) {
+    await startPlayback();
+  }
+}
+
 function updateSentenceHighlight(current, duration) {
-  if (!duration || !state.sentences.length || !isPreviewCurrentPage()) return;
+  const sentences = isPreviewCurrentPage() ? state.sentences : state.playbackSentences;
+  if (!duration || !sentences.length) return;
   if (state.sentenceTimings.length) {
     const currentMs = current * 1000;
     const timingIndex = state.sentenceTimings.findIndex((timing, timingListIndex) => {
@@ -635,21 +760,21 @@ function updateSentenceHighlight(current, duration) {
     });
     if (timingIndex >= 0) {
       const timing = state.sentenceTimings[timingIndex];
-      const sentenceIndex = state.sentences.findIndex(
+      const sentenceIndex = sentences.findIndex(
         (sentence) => sentence.timingIndex === timing.sentence_index,
       );
-      if (sentenceIndex >= 0 && sentenceIndex !== state.activeSentenceIndex) {
+      if (sentenceIndex >= 0 && sentenceIndex !== state.playbackSentenceIndex) {
         highlightSentence(sentenceIndex);
       }
     }
     return;
   }
-  const textLength = state.sentences.at(-1)?.end || 1;
+  const textLength = sentences.at(-1)?.end || 1;
   const textPosition = (current / duration) * textLength;
-  const index = state.sentences.findIndex(
+  const index = sentences.findIndex(
     (sentence) => textPosition >= sentence.start && textPosition < sentence.end,
   );
-  if (index >= 0 && index !== state.activeSentenceIndex) {
+  if (index >= 0 && index !== state.playbackSentenceIndex) {
     highlightSentence(index);
   }
 }
@@ -715,7 +840,9 @@ async function deleteBook(bookId) {
     state.previewChapterIndex = 0;
     state.previewParagraphIndex = 0;
     state.sentences = [];
+    state.playbackSentences = [];
     state.sentenceTimings = [];
+    state.playbackSentenceIndex = 0;
     state.audioReady = false;
     state.loadingAudio = false;
     state.pendingAutoplay = false;
@@ -725,6 +852,7 @@ async function deleteBook(bookId) {
     el.paragraphMeta.textContent = "第 0 页 / 共 0 页";
     el.paragraphPreview.textContent = "导入书籍后，这里会显示当前段落文本。";
     updatePlayButton();
+    syncPlayerState(true);
   }
   state.chapterPopoverOpen = false;
   await loadBooks(true);
@@ -773,16 +901,8 @@ el.pathInput.addEventListener("input", () => {
   renderBooks();
 });
 
-el.playPause.addEventListener("click", async () => {
-  if (!state.bookId || state.loadingAudio) return;
-  if (el.audio.paused) {
-    await startPlayback();
-  } else {
-    el.audio.pause();
-    await saveProgress();
-  }
-  updatePlayButton();
-});
+el.overlayToggle.addEventListener("click", toggleOverlay);
+el.playPause.addEventListener("click", togglePlayback);
 el.prevChapter.addEventListener("click", () => previewJumpToChapter(state.previewChapterIndex - 1));
 el.nextChapter.addEventListener("click", () => previewJumpToChapter(state.previewChapterIndex + 1));
 el.prevParagraph.addEventListener("click", () => previewJumpToParagraph(state.previewParagraphIndex - 1));
@@ -801,17 +921,34 @@ el.rateInput.addEventListener("change", async () => {
   await reloadCurrentAudioWithSettings();
 });
 el.audio.addEventListener("timeupdate", updateProgress);
-el.audio.addEventListener("play", updatePlayButton);
-el.audio.addEventListener("playing", () => updatePlayButton(true));
+el.audio.addEventListener("play", () => {
+  updatePlayButton();
+  syncPlayerState(true);
+});
+el.audio.addEventListener("playing", () => {
+  updatePlayButton(true);
+  syncPlayerState(true);
+});
 el.audio.addEventListener("pause", async () => {
   await saveProgress();
   updatePlayButton();
+  syncPlayerState(true);
 });
 el.audio.addEventListener("ended", () => jumpToParagraph(state.paragraphIndex + 1, true));
 window.addEventListener("beforeunload", saveProgress);
 setInterval(saveProgress, 7000);
+setInterval(pollPlayerCommand, 500);
+setInterval(refreshOverlayStatus, 3000);
+setInterval(() => syncPlayerState(true), 2000);
 
 renderPanels();
+updateOverlayButton();
+refreshOverlayStatus();
 loadVoices()
   .then(() => loadBooks(true))
+  .then(() => {
+    if (state.pendingStartPlaybackCommand) {
+      return startPlaybackFromCommand();
+    }
+  })
   .catch((error) => setStatus(error.message));

@@ -1,5 +1,10 @@
 import shutil
+import subprocess
+import sys
+import threading
+import time
 import uuid
+import webbrowser
 from pathlib import Path
 from typing import Annotated
 
@@ -10,12 +15,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .book_parser import chunk_chapter, make_book_id, parse_book
 from .config import (
+    APP_DIR,
     CHINESE_VOICES,
     DATA_DIR,
     DEFAULT_RATE,
     DEFAULT_VOICE,
     DEFAULT_VOLUME,
     FRONTEND_DIR,
+    LOG_DIR,
     SUPPORTED_FORMATS,
     ensure_dirs,
 )
@@ -31,6 +38,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+PLAYER_STATE_LOCK = threading.Lock()
+PLAYER_STATE: dict = {
+    "book_title": "",
+    "chapter_title": "",
+    "page_label": "",
+    "current_sentence": "",
+    "next_sentence": "",
+    "is_playing": False,
+    "updated_at": 0.0,
+}
+PLAYER_COMMAND: dict | None = None
+PLAYER_COMMAND_LOCK = threading.Lock()
+OVERLAY_PROCESS: subprocess.Popen | None = None
 
 
 @app.on_event("startup")
@@ -52,6 +73,112 @@ def voices() -> dict:
         "rate": DEFAULT_RATE,
         "volume": DEFAULT_VOLUME,
     }
+
+
+def _overlay_is_running() -> bool:
+    global OVERLAY_PROCESS
+    if OVERLAY_PROCESS and OVERLAY_PROCESS.poll() is None:
+        return True
+    OVERLAY_PROCESS = None
+    return False
+
+
+@app.post("/api/overlay/start")
+def start_overlay() -> dict:
+    global OVERLAY_PROCESS
+    if _overlay_is_running():
+        return {"running": True, "pid": OVERLAY_PROCESS.pid if OVERLAY_PROCESS else None}
+
+    overlay_script = APP_DIR / "overlay_window.py"
+    if not overlay_script.exists():
+        raise HTTPException(status_code=500, detail="Overlay script not found")
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    with (LOG_DIR / "overlay.out.log").open("a", encoding="utf-8") as stdout, (
+        LOG_DIR / "overlay.err.log"
+    ).open("a", encoding="utf-8") as stderr:
+        OVERLAY_PROCESS = subprocess.Popen(
+            [
+                sys.executable,
+                str(overlay_script),
+                "--base-url",
+                "http://127.0.0.1:8765",
+            ],
+            cwd=str(APP_DIR.parent),
+            stdout=stdout,
+            stderr=stderr,
+            creationflags=creationflags,
+        )
+    return {"running": True, "pid": OVERLAY_PROCESS.pid}
+
+
+@app.post("/api/overlay/stop")
+def stop_overlay() -> dict:
+    global OVERLAY_PROCESS
+    if _overlay_is_running() and OVERLAY_PROCESS:
+        OVERLAY_PROCESS.terminate()
+        try:
+            OVERLAY_PROCESS.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            OVERLAY_PROCESS.kill()
+            OVERLAY_PROCESS.wait(timeout=2)
+    OVERLAY_PROCESS = None
+    return {"running": False}
+
+
+@app.get("/api/overlay/status")
+def overlay_status() -> dict:
+    return {"running": _overlay_is_running(), "pid": OVERLAY_PROCESS.pid if OVERLAY_PROCESS else None}
+
+
+@app.get("/api/player/state")
+def get_player_state() -> dict:
+    with PLAYER_STATE_LOCK:
+        return dict(PLAYER_STATE)
+
+
+@app.post("/api/player/state")
+def update_player_state(payload: dict) -> dict:
+    allowed = {
+        "book_title",
+        "chapter_title",
+        "page_label",
+        "current_sentence",
+        "next_sentence",
+        "is_playing",
+    }
+    with PLAYER_STATE_LOCK:
+        for key in allowed:
+            if key in payload:
+                PLAYER_STATE[key] = bool(payload[key]) if key == "is_playing" else str(payload[key] or "")
+        PLAYER_STATE["updated_at"] = time.time()
+        return dict(PLAYER_STATE)
+
+
+@app.post("/api/player/command")
+def send_player_command(payload: dict) -> dict:
+    global PLAYER_COMMAND
+    command = str(payload.get("command") or "")
+    if command not in {"toggle_play", "start_playback"}:
+        raise HTTPException(status_code=400, detail="Unsupported command")
+    with PLAYER_STATE_LOCK:
+        state_age = time.time() - float(PLAYER_STATE.get("updated_at") or 0)
+    if state_age > 5:
+        webbrowser.open("http://127.0.0.1:8765/app/")
+        command = "start_playback"
+    with PLAYER_COMMAND_LOCK:
+        PLAYER_COMMAND = {"command": command, "created_at": time.time()}
+    return {"queued": True, "command": command}
+
+
+@app.get("/api/player/command")
+def get_player_command() -> dict:
+    global PLAYER_COMMAND
+    with PLAYER_COMMAND_LOCK:
+        command = PLAYER_COMMAND
+        PLAYER_COMMAND = None
+    return command or {"command": None}
 
 
 @app.get("/api/books")
