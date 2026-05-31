@@ -29,6 +29,7 @@ const state = {
   lastPlayerStateSync: 0,
   pollingPlayerCommand: false,
   pendingStartPlaybackCommand: false,
+  epubCss: "",
 };
 
 const el = {
@@ -46,6 +47,7 @@ const el = {
   voiceSelect: document.querySelector("#voiceSelect"),
   rateInput: document.querySelector("#rateInput"),
   overlayToggle: document.querySelector("#overlayToggle"),
+  epubStyle: document.querySelector("#epubStyle"),
   chapterList: document.querySelector("#chapterList"),
   paragraphMeta: document.querySelector("#paragraphMeta"),
   paragraphPreview: document.querySelector("#paragraphPreview"),
@@ -186,7 +188,7 @@ function renderCurrent() {
   el.bookTitle.textContent = book?.title || "未选择书籍";
   el.chapterTitle.textContent = chapter?.title || "章节会显示在这里";
   el.paragraphMeta.textContent = totalPages ? `第 ${currentPage} 页 / 共 ${totalPages} 页` : "第 0 页 / 共 0 页";
-  renderParagraph(paragraph?.text || "当前章节暂无内容。");
+  renderParagraph(paragraph || { text: "当前章节暂无内容。", html: null });
   el.backToCurrentPage.disabled = isPreviewCurrentPage();
   updatePlayButton();
   renderBooks();
@@ -222,8 +224,41 @@ function renderPanels() {
   el.toggleLibrary.setAttribute("aria-label", el.toggleLibrary.title);
 }
 
-function renderParagraph(text) {
+function renderParagraph(paragraph) {
+  const text = typeof paragraph === "string" ? paragraph : paragraph?.text || "";
+  const html = typeof paragraph === "string" ? null : paragraph?.html;
+  if (html) {
+    renderEpubParagraph(html, text);
+  } else {
+    renderPlainParagraph(text);
+  }
+  bindSentenceClicks();
+}
+
+function renderPlainParagraph(text) {
   state.sentences = splitSentences(text);
+  prepareRenderedSentences();
+  el.paragraphPreview.classList.remove("epub-mode");
+  el.paragraphPreview.innerHTML = state.sentences
+    .map((sentence, index) => sentenceSpanHtml(sentence, index))
+    .join("");
+}
+
+function renderEpubParagraph(html, fallbackText) {
+  el.paragraphPreview.classList.add("epub-mode");
+  el.paragraphPreview.innerHTML = html;
+  const pieces = collectEpubSentencePieces(el.paragraphPreview);
+  if (!pieces.length) {
+    state.sentences = fallbackText ? splitSentences(fallbackText) : [];
+    prepareRenderedSentences();
+    return;
+  }
+  state.sentences = pieces.map((piece) => piece.sentence);
+  prepareRenderedSentences();
+  wrapEpubSentencePieces(pieces);
+}
+
+function prepareRenderedSentences() {
   if (isPreviewCurrentPage()) {
     applySentenceTimings();
     state.playbackSentences = state.sentences.map((sentence) => ({ ...sentence }));
@@ -231,17 +266,23 @@ function renderParagraph(text) {
   state.activeSentenceIndex = isPreviewCurrentPage()
     ? Math.min(state.playbackSentenceIndex, Math.max(0, state.sentences.length - 1))
     : Math.min(state.activeSentenceIndex, Math.max(0, state.sentences.length - 1));
-  el.paragraphPreview.innerHTML = state.sentences
-    .map(
-      (sentence, index) => {
-        const interactive = sentence.timingIndex !== undefined || !isPreviewCurrentPage();
-        const classes = ["sentence", interactive ? "timed" : "untimed"];
-        if (index === state.activeSentenceIndex && sentence.timingIndex !== undefined && isPreviewCurrentPage()) classes.push("active");
-        return `<span class="${classes.join(" ")}" data-index="${index}">${escapeHtml(sentence.text)}</span>`;
-      },
-    )
-    .join("");
+}
 
+function sentenceSpanHtml(sentence, index) {
+  const interactive = sentence.timingIndex !== undefined || !isPreviewCurrentPage();
+  const classes = ["sentence", interactive ? "timed" : "untimed"];
+  if (index === state.activeSentenceIndex && sentence.timingIndex !== undefined && isPreviewCurrentPage()) classes.push("active");
+  return `<span class="${classes.join(" ")}" data-index="${index}">${escapeHtml(sentence.text)}</span>`;
+}
+
+function sentenceClasses(sentence, index) {
+  const interactive = sentence.timingIndex !== undefined || !isPreviewCurrentPage();
+  const classes = ["sentence", interactive ? "timed" : "untimed"];
+  if (index === state.activeSentenceIndex && sentence.timingIndex !== undefined && isPreviewCurrentPage()) classes.push("active");
+  return classes.join(" ");
+}
+
+function bindSentenceClicks() {
   document.querySelectorAll(".sentence").forEach((node) => {
     if (node.classList.contains("timed")) {
       node.addEventListener("click", () => playFromSentence(Number(node.dataset.index)));
@@ -285,6 +326,68 @@ function splitSentences(text) {
     }
   }
   return sentences.length ? sentences : [{ text, start: 0, end: String(text).length }];
+}
+
+function collectEpubSentencePieces(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const textNodes = [];
+  while (walker.nextNode()) {
+    textNodes.push(walker.currentNode);
+  }
+
+  const pieces = [];
+  let offset = 0;
+  for (const node of textNodes) {
+    const text = node.nodeValue;
+    const matches = [...text.matchAll(/[^。！？；!?;]+[。！？；!?;]?\s*/g)];
+    if (!matches.length) {
+      offset += text.length;
+      continue;
+    }
+    for (const match of matches) {
+      const value = match[0];
+      const start = match.index || 0;
+      const end = start + value.length;
+      if (!value.trim()) continue;
+      const sentence = { text: value, start: offset + start, end: offset + end };
+      pieces.push({ node, start, end, sentence, index: pieces.length });
+    }
+    offset += text.length;
+  }
+  return pieces;
+}
+
+function wrapEpubSentencePieces(pieces) {
+  const byNode = new Map();
+  pieces.forEach((piece) => {
+    if (!byNode.has(piece.node)) byNode.set(piece.node, []);
+    byNode.get(piece.node).push(piece);
+  });
+
+  byNode.forEach((nodePieces, node) => {
+    const text = node.nodeValue;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    nodePieces.forEach((piece) => {
+      if (piece.start > cursor) {
+        fragment.append(document.createTextNode(text.slice(cursor, piece.start)));
+      }
+      const span = document.createElement("span");
+      span.className = sentenceClasses(state.sentences[piece.index], piece.index);
+      span.dataset.index = String(piece.index);
+      span.textContent = text.slice(piece.start, piece.end);
+      fragment.append(span);
+      cursor = piece.end;
+    });
+    if (cursor < text.length) {
+      fragment.append(document.createTextNode(text.slice(cursor)));
+    }
+    node.parentNode.replaceChild(fragment, node);
+  });
 }
 
 async function playFromSentence(index) {
@@ -352,9 +455,21 @@ async function selectBook(bookId) {
   state.previewChapterIndex = state.chapterIndex;
   state.previewParagraphIndex = state.paragraphIndex;
   syncSettings();
+  await loadEpubCss(bookId);
   await loadParagraphs(state.chapterIndex, true);
   await loadAudio(progress.audio_position_ms || 0);
   setStatus("就绪");
+}
+
+async function loadEpubCss(bookId) {
+  try {
+    const data = await api(`/api/books/${bookId}/epub-css`);
+    state.epubCss = data.css || "";
+    el.epubStyle.textContent = state.epubCss;
+  } catch {
+    state.epubCss = "";
+    el.epubStyle.textContent = "";
+  }
 }
 
 async function loadParagraphs(chapterIndex, syncPreview = true) {
@@ -382,6 +497,10 @@ async function loadPreviewParagraphs(chapterIndex) {
 
 async function loadAudio(positionMs = 0, autoplay = false) {
   if (!state.bookId || !state.paragraphs[state.paragraphIndex]) return;
+  if (!isAudioParagraph(state.paragraphs[state.paragraphIndex])) {
+    const moved = await moveToNextAudioPage(state.paragraphIndex + 1);
+    if (!moved) return;
+  }
   state.loadingAudio = true;
   state.pendingAutoplay = autoplay;
   state.audioReady = false;
@@ -448,6 +567,46 @@ async function loadAudio(positionMs = 0, autoplay = false) {
   });
 }
 
+function isAudioParagraph(paragraph) {
+  return Boolean(paragraph && Number(paragraph.is_audio ?? 1) === 1);
+}
+
+function findNextAudioParagraph(startIndex = 0) {
+  for (let index = Math.max(0, startIndex); index < state.paragraphs.length; index += 1) {
+    if (isAudioParagraph(state.paragraphs[index])) return index;
+  }
+  return null;
+}
+
+async function moveToNextAudioPage(startIndex = 0) {
+  const sameChapterIndex = findNextAudioParagraph(startIndex);
+  if (sameChapterIndex !== null) {
+    state.paragraphIndex = sameChapterIndex;
+    state.previewChapterIndex = state.chapterIndex;
+    state.previewParagraphIndex = state.paragraphIndex;
+    state.previewParagraphs = state.paragraphs;
+    renderCurrent();
+    return true;
+  }
+
+  const followingChapters = state.chapters.filter((chapter) => chapter.chapter_index > state.chapterIndex);
+  for (const chapter of followingChapters) {
+    const paragraphs = await api(`/api/books/${state.bookId}/paragraphs?chapter_index=${chapter.chapter_index}`);
+    const index = paragraphs.findIndex(isAudioParagraph);
+    if (index >= 0) {
+      state.chapterIndex = chapter.chapter_index;
+      state.paragraphs = paragraphs;
+      state.paragraphIndex = index;
+      state.previewChapterIndex = state.chapterIndex;
+      state.previewParagraphIndex = state.paragraphIndex;
+      state.previewParagraphs = state.paragraphs;
+      renderCurrent();
+      return true;
+    }
+  }
+  return false;
+}
+
 async function loadSentenceTimings() {
   if (!state.bookId) return;
   const params = new URLSearchParams({
@@ -460,12 +619,12 @@ async function loadSentenceTimings() {
   try {
     state.sentenceTimings = await api(`/api/books/${state.bookId}/sentence-timings?${params.toString()}`);
     if (isPreviewCurrentPage()) {
-      renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+      renderParagraph(state.paragraphs[state.paragraphIndex] || { text: "" });
     }
   } catch {
     state.sentenceTimings = [];
     if (isPreviewCurrentPage()) {
-      renderParagraph(state.paragraphs[state.paragraphIndex]?.text || "");
+      renderParagraph(state.paragraphs[state.paragraphIndex] || { text: "" });
     }
   }
 }
@@ -508,6 +667,10 @@ async function reloadCurrentAudioWithSettings() {
 
 async function startPlayback() {
   if (!state.bookId || state.loadingAudio) return;
+  if (!isAudioParagraph(state.paragraphs[state.paragraphIndex])) {
+    const moved = await moveToNextAudioPage(state.paragraphIndex + 1);
+    if (!moved) return;
+  }
   if (!state.audioReady || !el.audio.src) {
     await loadAudio(Math.floor((el.audio.currentTime || 0) * 1000), true);
     return;
@@ -843,6 +1006,8 @@ async function deleteBook(bookId) {
     state.playbackSentences = [];
     state.sentenceTimings = [];
     state.playbackSentenceIndex = 0;
+    state.epubCss = "";
+    el.epubStyle.textContent = "";
     state.audioReady = false;
     state.loadingAudio = false;
     state.pendingAutoplay = false;

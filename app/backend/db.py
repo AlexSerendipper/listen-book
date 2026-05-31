@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS books (
   file_path TEXT NOT NULL,
   title TEXT,
   author TEXT,
+  epub_css TEXT NOT NULL DEFAULT '',
   file_format TEXT NOT NULL,
   file_size INTEGER,
   file_mtime INTEGER,
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS paragraphs (
   paragraph_index INTEGER NOT NULL,
   text TEXT NOT NULL,
   text_hash TEXT NOT NULL,
+  html TEXT,
+  is_audio INTEGER NOT NULL DEFAULT 1,
   FOREIGN KEY(book_id) REFERENCES books(id) ON DELETE CASCADE,
   UNIQUE(book_id, chapter_index, paragraph_index)
 );
@@ -96,7 +99,16 @@ def init_db(db_path: Path = DB_PATH) -> None:
     ensure_dirs()
     with sqlite3.connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        _ensure_column(conn, "books", "epub_css", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "paragraphs", "html", "TEXT")
+        _ensure_column(conn, "paragraphs", "is_audio", "INTEGER NOT NULL DEFAULT 1")
         conn.commit()
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 @contextmanager

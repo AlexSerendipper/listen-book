@@ -5,6 +5,7 @@ APP_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = APP_DIR / "data"
 CACHE_DIR = APP_DIR / "cache"
 AUDIO_CACHE_DIR = CACHE_DIR / "audio"
+EPUB_ASSET_DIR = DATA_DIR / "epub_assets"
 LOG_DIR = APP_DIR / "logs"
 FRONTEND_DIR = APP_DIR / "frontend"
 DB_PATH = DATA_DIR / "app.sqlite"
@@ -25,5 +26,6 @@ CHINESE_VOICES = [
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    EPUB_ASSET_DIR.mkdir(parents=True, exist_ok=True)
     AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)

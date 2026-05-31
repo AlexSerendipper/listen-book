@@ -21,6 +21,7 @@ from .config import (
     DEFAULT_RATE,
     DEFAULT_VOICE,
     DEFAULT_VOLUME,
+    EPUB_ASSET_DIR,
     FRONTEND_DIR,
     LOG_DIR,
     SUPPORTED_FORMATS,
@@ -224,12 +225,18 @@ async def import_book(
     if suffix not in SUPPORTED_FORMATS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
 
+    book_id = make_book_id(path)
+    asset_dir = EPUB_ASSET_DIR / book_id
+    if asset_dir.exists():
+        shutil.rmtree(asset_dir)
+
     try:
-        title, chapters = parse_book(path)
+        parsed = parse_book(path, book_id=book_id, assets_dir=asset_dir)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    book_id = make_book_id(path)
+    title = parsed.title
+    chapters = parsed.chapters
     stat = path.stat()
     now = utc_now()
 
@@ -238,14 +245,15 @@ async def import_book(
         db.execute(
             """
             INSERT OR REPLACE INTO books
-            (id, file_path, title, author, file_format, file_size, file_mtime, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, file_path, title, author, epub_css, file_format, file_size, file_mtime, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 book_id,
                 str(path),
                 title,
                 None,
+                parsed.epub_css,
                 suffix.lstrip("."),
                 stat.st_size,
                 int(stat.st_mtime),
@@ -264,12 +272,13 @@ async def import_book(
                 """,
                 (str(uuid.uuid4()), book_id, chapter_index, chapter.title, chapter.text),
             )
-            for paragraph_index, paragraph in enumerate(chunk_chapter(chapter.text)):
+            paragraphs = chapter.paragraphs or chunk_chapter(chapter.text)
+            for paragraph_index, paragraph in enumerate(paragraphs):
                 db.execute(
                     """
                     INSERT INTO paragraphs
-                    (id, book_id, chapter_index, paragraph_index, text, text_hash)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (id, book_id, chapter_index, paragraph_index, text, text_hash, html, is_audio)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(uuid.uuid4()),
@@ -278,6 +287,8 @@ async def import_book(
                         paragraph_index,
                         paragraph.text,
                         paragraph.text_hash,
+                        paragraph.html,
+                        1 if paragraph.is_audio else 0,
                     ),
                 )
 
@@ -302,6 +313,9 @@ def delete_book(book_id: str) -> dict:
     audio_dir = (DATA_DIR.parent / "cache" / "audio" / book_id).resolve()
     if audio_dir.exists():
         shutil.rmtree(audio_dir)
+    asset_dir = (EPUB_ASSET_DIR / book_id).resolve()
+    if asset_dir.exists():
+        shutil.rmtree(asset_dir)
 
     stored_book_path = Path(book["file_path"]).resolve()
     books_dir = (DATA_DIR / "books").resolve()
@@ -332,6 +346,27 @@ def get_book(book_id: str) -> dict:
     return data
 
 
+@app.get("/api/books/{book_id}/epub-css")
+def get_epub_css(book_id: str) -> dict:
+    with get_db() as db:
+        row = db.execute("SELECT epub_css FROM books WHERE id = ?", (book_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"css": row["epub_css"] or ""}
+
+
+@app.get("/api/books/{book_id}/assets/{asset_path:path}")
+def get_epub_asset(book_id: str, asset_path: str) -> FileResponse:
+    asset_root = (EPUB_ASSET_DIR / book_id).resolve()
+    target = (asset_root / asset_path).resolve()
+    try:
+        if not target.is_file() or not target.is_relative_to(asset_root):
+            raise HTTPException(status_code=404, detail="Asset not found")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Asset not found") from None
+    return FileResponse(target)
+
+
 @app.get("/api/books/{book_id}/chapters")
 def get_chapters(book_id: str) -> list[dict]:
     with get_db() as db:
@@ -355,7 +390,7 @@ def get_paragraphs(book_id: str, chapter_index: int = Query(ge=0)) -> list[dict]
     with get_db() as db:
         rows = db.execute(
             """
-            SELECT chapter_index, paragraph_index, text, text_hash
+            SELECT chapter_index, paragraph_index, text, text_hash, html, is_audio
             FROM paragraphs
             WHERE book_id = ? AND chapter_index = ?
             ORDER BY paragraph_index
@@ -442,11 +477,12 @@ async def ensure_audio_cache(
             SELECT text, text_hash
             FROM paragraphs
             WHERE book_id = ? AND chapter_index = ? AND paragraph_index = ?
+              AND is_audio = 1
             """,
             (book_id, chapter_index, paragraph_index),
         ).fetchone()
         if not paragraph:
-            raise HTTPException(status_code=404, detail="Paragraph not found")
+            raise HTTPException(status_code=404, detail="Audio paragraph not found")
 
         cached = db.execute(
             """
@@ -543,6 +579,7 @@ def get_sentence_timings(
             SELECT text_hash
             FROM paragraphs
             WHERE book_id = ? AND chapter_index = ? AND paragraph_index = ?
+              AND is_audio = 1
             """,
             (book_id, chapter_index, paragraph_index),
         ).fetchone()

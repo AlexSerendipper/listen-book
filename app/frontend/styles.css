@@ -421,7 +421,7 @@ h2 {
 .paragraph-preview {
   height: 100%;
   min-height: 420px;
-  overflow: hidden;
+  overflow: auto;
   white-space: pre-wrap;
   font-size: 22px;
   line-height: 1.72;
@@ -429,6 +429,39 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 28px;
+}
+
+.paragraph-preview.epub-mode {
+  white-space: normal;
+}
+
+.paragraph-preview .epub-fragment {
+  max-width: 100%;
+}
+
+.paragraph-preview .epub-fragment p,
+.paragraph-preview .epub-fragment blockquote,
+.paragraph-preview .epub-fragment ul,
+.paragraph-preview .epub-fragment ol,
+.paragraph-preview .epub-fragment table {
+  margin-top: 0;
+}
+
+.paragraph-preview .epub-fragment img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.paragraph-preview .epub-fragment table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.paragraph-preview .epub-fragment td,
+.paragraph-preview .epub-fragment th {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
 }
 
 .sentence {
