@@ -368,7 +368,8 @@ h2 {
 }
 
 .workbench {
-  display: block;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -412,8 +413,10 @@ h2 {
 }
 
 .reader {
+  align-self: stretch;
   height: 100%;
   min-height: 0;
+  max-height: 100%;
   padding: 24px;
   display: grid;
   grid-template-rows: var(--reader-top-height) minmax(0, 1fr) var(--reader-progress-height) var(--reader-controls-height);
@@ -443,10 +446,13 @@ h2 {
 }
 
 .paragraph-preview {
+  align-self: stretch;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
+  contain: layout paint;
   white-space: pre-wrap;
   font-size: 21px;
   line-height: 1.62;
