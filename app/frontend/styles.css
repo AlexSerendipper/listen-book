@@ -421,10 +421,10 @@ h2 {
 .paragraph-preview {
   height: 100%;
   min-height: 420px;
-  overflow: auto;
+  overflow: hidden;
   white-space: pre-wrap;
-  font-size: 22px;
-  line-height: 1.72;
+  font-size: 21px;
+  line-height: 1.62;
   background: #fffdf6;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -450,7 +450,9 @@ h2 {
 .paragraph-preview .epub-fragment img {
   display: block;
   max-width: 100%;
+  max-height: 100%;
   height: auto;
+  object-fit: contain;
 }
 
 .paragraph-preview .epub-fragment table {

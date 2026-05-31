@@ -139,7 +139,7 @@ def parse_epub(path: Path, book_id: str | None = None, assets_dir: Path | None =
     return ParsedBook(title, _non_empty_chapters(chapters) or [Chapter(title, "")], css)
 
 
-def chunk_chapter(text: str, min_len: int = 700, max_len: int = 900) -> list[Paragraph]:
+def chunk_chapter(text: str, min_len: int = 420, max_len: int = 620) -> list[Paragraph]:
     raw_parts = [
         Paragraph(text=part.strip(), text_hash=sha1_text(part.strip()))
         for part in re.split(r"\n\s*\n+", text)
@@ -148,7 +148,7 @@ def chunk_chapter(text: str, min_len: int = 700, max_len: int = 900) -> list[Par
     return chunk_paragraphs(raw_parts, min_len=min_len, max_len=max_len)
 
 
-def chunk_paragraphs(raw_parts: list[Paragraph], min_len: int = 700, max_len: int = 900) -> list[Paragraph]:
+def chunk_paragraphs(raw_parts: list[Paragraph], min_len: int = 420, max_len: int = 620) -> list[Paragraph]:
     chunks: list[str] = []
     html_chunks: list[list[str | None]] = []
     audio_flags: list[bool] = []
@@ -171,6 +171,20 @@ def chunk_paragraphs(raw_parts: list[Paragraph], min_len: int = 700, max_len: in
             audio_flags.append(False)
             continue
 
+        if carry:
+            candidate = f"{carry}\n{part_text}"
+            if not carry_audio and part.is_audio and len(carry) < 120 and (len(carry_html) >= 3 or len(part_text) > 300):
+                chunks.append(carry)
+                html_chunks.append(carry_html)
+                audio_flags.append(False)
+                carry = ""
+                carry_html = []
+                carry_audio = False
+            elif len(candidate) <= max_len:
+                carry = candidate
+                carry_html.append(part.html)
+                carry_audio = carry_audio or part.is_audio
+                continue
         if carry:
             candidate = f"{carry}\n{part_text}"
             if len(candidate) <= max_len:
@@ -413,7 +427,7 @@ def _epub_item_paragraphs(book, item, book_id: str | None, assets_dir: Path | No
         if not text or _looks_like_non_content("", text):
             continue
         html = _fragment_for_block(soup, block, body)
-        is_audio = len(_compact_text(text)) >= 30
+        is_audio = len(_compact_text(text)) >= 30 and not _is_epub_front_matter_block(block)
         paragraphs.append(Paragraph(text=text, text_hash=sha1_text(text), html=html, is_audio=is_audio))
     if paragraphs:
         return paragraphs
@@ -436,6 +450,15 @@ def _content_blocks(root) -> list:
                 content.append(node)
                 seen.add(id(node))
     return content
+
+
+def _is_epub_front_matter_block(block) -> bool:
+    front_matter_classes = {"shuming", "chubanshe"}
+    for node in [block, *list(block.parents)]:
+        classes = set(node.get("class") or []) if getattr(node, "get", None) else set()
+        if classes & front_matter_classes:
+            return True
+    return False
 
 
 def _is_large_image_node(node) -> bool:

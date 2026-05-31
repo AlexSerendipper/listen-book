@@ -35,7 +35,7 @@ class BookParserTests(unittest.TestCase):
         text = "。".join([f"这是一段用于听书的长文本内容{i}" for i in range(260)]) + "。"
         chunks = chunk_chapter(text)
         self.assertGreater(len(chunks), 1)
-        self.assertTrue(all(len(chunk.text) <= 900 for chunk in chunks))
+        self.assertTrue(all(len(chunk.text) <= 620 for chunk in chunks))
 
     def test_epub_css_is_scoped_to_reader(self) -> None:
         css = "body { margin: 0; } .callout { border: 1px solid #777; } @import url(http://example.com/a.css);"
@@ -80,7 +80,7 @@ class BookParserTests(unittest.TestCase):
         self.assertIn("第二段", chunks[0].html)
         self.assertIn("<img", chunks[1].html)
 
-    def test_epub_short_front_matter_stays_on_one_page(self) -> None:
+    def test_epub_short_front_matter_stays_separate_from_long_intro(self) -> None:
         raw = [
             Paragraph(text="Title", text_hash="title", html="<p>Title</p>", is_audio=False),
             Paragraph(text="Subtitle", text_hash="subtitle", html="<p>Subtitle</p>", is_audio=False),
@@ -90,10 +90,11 @@ class BookParserTests(unittest.TestCase):
 
         chunks = chunk_paragraphs(raw, min_len=100, max_len=900)
 
-        self.assertEqual(len(chunks), 1)
-        self.assertTrue(chunks[0].is_audio)
+        self.assertEqual(len(chunks), 2)
+        self.assertFalse(chunks[0].is_audio)
+        self.assertTrue(chunks[1].is_audio)
         self.assertIn("Title", chunks[0].text)
-        self.assertIn("Intro sentence", chunks[0].text)
+        self.assertIn("Intro sentence", chunks[1].text)
 
     def test_epub_short_label_stays_with_following_quote(self) -> None:
         raw = [

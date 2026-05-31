@@ -1,3 +1,23 @@
+const READER_EPUB_OVERRIDES = `
+.paragraph-preview .epub-fragment-page {
+  max-height: 100%;
+}
+.paragraph-preview .epub-fragment .shuming {
+  padding-top: 0 !important;
+}
+.paragraph-preview .epub-fragment .chubanshe {
+  position: static !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: auto !important;
+  margin: 1.2em 0 0 !important;
+}
+.paragraph-preview .epub-fragment img {
+  max-height: calc(100vh - 340px) !important;
+  object-fit: contain;
+}
+`;
+
 const state = {
   books: [],
   chapters: [],
@@ -465,10 +485,10 @@ async function loadEpubCss(bookId) {
   try {
     const data = await api(`/api/books/${bookId}/epub-css`);
     state.epubCss = data.css || "";
-    el.epubStyle.textContent = state.epubCss;
+    el.epubStyle.textContent = `${state.epubCss}\n${READER_EPUB_OVERRIDES}`;
   } catch {
     state.epubCss = "";
-    el.epubStyle.textContent = "";
+    el.epubStyle.textContent = READER_EPUB_OVERRIDES;
   }
 }
 
@@ -795,6 +815,25 @@ function backToCurrentPage() {
   renderCurrent();
 }
 
+function isEditingText(event) {
+  const tagName = event.target?.tagName?.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select" || event.target?.isContentEditable;
+}
+
+function handleKeyboardShortcuts(event) {
+  if (isEditingText(event) || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    previewJumpToParagraph(state.previewParagraphIndex - 1);
+  } else if (event.key === "ArrowRight") {
+    event.preventDefault();
+    previewJumpToParagraph(state.previewParagraphIndex + 1);
+  } else if (event.key === " ") {
+    event.preventDefault();
+    togglePlayback();
+  }
+}
+
 function updateProgress() {
   const duration = el.audio.duration || 0;
   const current = el.audio.currentTime || 0;
@@ -1101,6 +1140,7 @@ el.audio.addEventListener("pause", async () => {
 });
 el.audio.addEventListener("ended", () => jumpToParagraph(state.paragraphIndex + 1, true));
 window.addEventListener("beforeunload", saveProgress);
+window.addEventListener("keydown", handleKeyboardShortcuts);
 setInterval(saveProgress, 7000);
 setInterval(pollPlayerCommand, 500);
 setInterval(refreshOverlayStatus, 3000);
