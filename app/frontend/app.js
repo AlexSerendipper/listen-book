@@ -1,9 +1,36 @@
 const READER_EPUB_OVERRIDES = `
 .paragraph-preview .epub-fragment-page {
   max-height: 100%;
+  box-sizing: border-box;
 }
-.paragraph-preview .epub-fragment .shuming {
+.paragraph-preview .epub-fragment,
+.paragraph-preview .epub-fragment * {
+  box-sizing: border-box;
+}
+.paragraph-preview .epub-fragment h1,
+.paragraph-preview .epub-fragment h2,
+.paragraph-preview .epub-fragment h3 {
+  margin-top: 0.35em !important;
+  margin-bottom: 0.55em !important;
+  line-height: 1.25 !important;
+}
+.paragraph-preview .epub-fragment p {
+  margin-top: 0.35em !important;
+  margin-bottom: 0.35em !important;
+  line-height: 1.45 !important;
+}
+.paragraph-preview .epub-fragment .shuming,
+.paragraph-preview .epub-fragment .juzhong3 {
   padding-top: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0.8em !important;
+}
+.paragraph-preview .epub-fragment .roundsolid,
+.paragraph-preview .epub-fragment .solidtb,
+.paragraph-preview .epub-fragment .solidorange {
+  margin: 0.75em 0 !important;
+  padding: 0.65em 1.6em !important;
+  border-radius: 12px !important;
 }
 .paragraph-preview .epub-fragment .chubanshe {
   position: static !important;

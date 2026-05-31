@@ -3,6 +3,7 @@ import unittest
 from bs4 import BeautifulSoup
 
 from app.backend.book_parser import (
+    _content_blocks,
     _fragment_for_block,
     _sanitize_style_attr,
     _scope_epub_css,
@@ -63,6 +64,25 @@ class BookParserTests(unittest.TestCase):
         self.assertIn('class="callout"', fragment)
         self.assertIn("如果你想获得你要的东西。", fragment)
         self.assertNotIn("查理·芒格", fragment)
+
+    def test_epub_structural_container_stays_one_fragment(self) -> None:
+        soup = BeautifulSoup(
+            '<body><div class="roundsolid"><p><b>Benjamin Franklin</b></p><p>The closest thing to reliving a life.</p></div></body>',
+            "html.parser",
+        )
+        blocks = _content_blocks(soup.body)
+
+        self.assertEqual(len(blocks), 1)
+        fragment = _fragment_for_block(soup, blocks[0], soup.body)
+        self.assertEqual(fragment.count('class="roundsolid"'), 1)
+        self.assertIn("Benjamin Franklin", fragment)
+        self.assertIn("The closest thing", fragment)
+
+    def test_epub_plain_paragraphs_stay_separate_blocks(self) -> None:
+        soup = BeautifulSoup("<body><p>First paragraph.</p><p>Second paragraph.</p></body>", "html.parser")
+        blocks = _content_blocks(soup.body)
+
+        self.assertEqual([block.get_text(" ", strip=True) for block in blocks], ["First paragraph.", "Second paragraph."])
 
     def test_epub_paragraphs_are_compacted_like_pages(self) -> None:
         raw = [

@@ -485,7 +485,20 @@ def _numeric_attr(value: str) -> int:
 
 def _readable_blocks(root) -> list:
     block_names = {"p", "li", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th"}
-    blocks = [tag for tag in root.find_all(block_names) if tag.get_text(" ", strip=True)]
+    structural_blocks = [
+        tag
+        for tag in root.find_all(["div", "section", "article", "aside", "blockquote"])
+        if tag.get_text(" ", strip=True)
+        and _is_epub_structural_block(tag)
+        and not any(_is_epub_structural_block(parent) for parent in tag.parents if parent is not root)
+    ]
+    blocks = [
+        tag
+        for tag in root.find_all(block_names)
+        if tag.get_text(" ", strip=True)
+        and not any(parent in structural_blocks for parent in tag.parents)
+    ]
+    blocks = sorted([*structural_blocks, *blocks], key=lambda tag: len(list(tag.previous_elements)))
     if blocks:
         return blocks
     return [
@@ -494,6 +507,19 @@ def _readable_blocks(root) -> list:
         if tag.get_text(" ", strip=True)
         and not tag.find(["div", "section", "article", "aside", *block_names])
     ]
+
+
+def _is_epub_structural_block(tag) -> bool:
+    structural_classes = {
+        "roundsolid",
+        "solidtb",
+        "solidorange",
+        "juzhong",
+        "juzhong1",
+        "juzhong2",
+        "juzhong3",
+    }
+    return bool(set(tag.get("class") or []) & structural_classes)
 
 
 def _fragment_for_block(soup, block, body) -> str:
