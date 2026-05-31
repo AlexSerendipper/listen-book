@@ -80,6 +80,38 @@ class BookParserTests(unittest.TestCase):
         self.assertIn("第二段", chunks[0].html)
         self.assertIn("<img", chunks[1].html)
 
+    def test_epub_short_front_matter_stays_on_one_page(self) -> None:
+        raw = [
+            Paragraph(text="Title", text_hash="title", html="<p>Title</p>", is_audio=False),
+            Paragraph(text="Subtitle", text_hash="subtitle", html="<p>Subtitle</p>", is_audio=False),
+            Paragraph(text="Author", text_hash="author", html="<p>Author</p>", is_audio=False),
+            Paragraph(text="Intro sentence. " * 35, text_hash="intro", html="<p>Intro sentence.</p>"),
+        ]
+
+        chunks = chunk_paragraphs(raw, min_len=100, max_len=900)
+
+        self.assertEqual(len(chunks), 1)
+        self.assertTrue(chunks[0].is_audio)
+        self.assertIn("Title", chunks[0].text)
+        self.assertIn("Intro sentence", chunks[0].text)
+
+    def test_epub_short_label_stays_with_following_quote(self) -> None:
+        raw = [
+            Paragraph(text="Benjamin Franklin", text_hash="name", html="<p><b>Benjamin Franklin</b></p>", is_audio=False),
+            Paragraph(
+                text="The closest thing to reliving a life is remembering it and writing it down.",
+                text_hash="quote",
+                html="<p>The closest thing to reliving a life is remembering it and writing it down.</p>",
+            ),
+        ]
+
+        chunks = chunk_paragraphs(raw, min_len=100, max_len=900)
+
+        self.assertEqual(len(chunks), 1)
+        self.assertTrue(chunks[0].is_audio)
+        self.assertIn("Benjamin Franklin", chunks[0].text)
+        self.assertIn("reliving a life", chunks[0].text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -158,7 +158,7 @@ def chunk_paragraphs(raw_parts: list[Paragraph], min_len: int = 700, max_len: in
 
     for part in raw_parts:
         part_text = part.text.strip()
-        if not part.is_audio:
+        if not part_text and not part.is_audio:
             if carry:
                 chunks.append(carry)
                 html_chunks.append(carry_html)
