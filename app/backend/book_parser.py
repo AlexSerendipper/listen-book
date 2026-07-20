@@ -298,7 +298,13 @@ def _split_long_text(text: str, target_len: int = 3500) -> list[Chapter]:
 
 
 def _non_empty_chapters(chapters: list[Chapter]) -> list[Chapter]:
-    return [chapter for chapter in chapters if chapter.text.strip()]
+    return [chapter for chapter in chapters if _chapter_has_readable_or_visual_content(chapter)]
+
+
+def _chapter_has_readable_or_visual_content(chapter: Chapter) -> bool:
+    if chapter.text.strip():
+        return True
+    return any(paragraph.text.strip() or paragraph.html for paragraph in chapter.paragraphs or [])
 
 
 def _epub_spine_documents(book) -> list:
@@ -499,6 +505,8 @@ def _readable_blocks(root) -> list:
         and not any(parent in structural_blocks for parent in tag.parents)
     ]
     blocks = sorted([*structural_blocks, *blocks], key=lambda tag: len(list(tag.previous_elements)))
+    selected_blocks = set(blocks)
+    blocks = [tag for tag in blocks if not any(parent in selected_blocks for parent in tag.parents)]
     if blocks:
         return blocks
     return [

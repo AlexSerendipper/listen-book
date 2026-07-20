@@ -3,8 +3,10 @@ import unittest
 from bs4 import BeautifulSoup
 
 from app.backend.book_parser import (
+    Chapter,
     _content_blocks,
     _fragment_for_block,
+    _non_empty_chapters,
     _sanitize_style_attr,
     _scope_epub_css,
     chunk_paragraphs,
@@ -78,11 +80,35 @@ class BookParserTests(unittest.TestCase):
         self.assertIn("Benjamin Franklin", fragment)
         self.assertIn("The closest thing", fragment)
 
+    def test_epub_blockquote_does_not_duplicate_child_paragraph(self) -> None:
+        soup = BeautifulSoup(
+            "<body><blockquote><p>Quoted paragraph.</p></blockquote><p>Next paragraph.</p></body>",
+            "html.parser",
+        )
+        blocks = _content_blocks(soup.body)
+
+        self.assertEqual([block.name for block in blocks], ["blockquote", "p"])
+        self.assertEqual([block.get_text(" ", strip=True) for block in blocks], ["Quoted paragraph.", "Next paragraph."])
+
     def test_epub_plain_paragraphs_stay_separate_blocks(self) -> None:
         soup = BeautifulSoup("<body><p>First paragraph.</p><p>Second paragraph.</p></body>", "html.parser")
         blocks = _content_blocks(soup.body)
 
         self.assertEqual([block.get_text(" ", strip=True) for block in blocks], ["First paragraph.", "Second paragraph."])
+
+    def test_epub_image_only_chapter_is_kept_as_visual_content(self) -> None:
+        chapter = Chapter(
+            title="Cover",
+            text="",
+            paragraphs=[
+                Paragraph(text="", text_hash="cover", html="<img src='/cover.jpg'>", is_audio=False),
+            ],
+        )
+
+        chapters = _non_empty_chapters([chapter])
+
+        self.assertEqual(chapters, [chapter])
+        self.assertFalse(chapters[0].paragraphs[0].is_audio)
 
     def test_epub_paragraphs_are_compacted_like_pages(self) -> None:
         raw = [

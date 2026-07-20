@@ -442,7 +442,8 @@ h2 {
 }
 
 .return-page:disabled {
-  visibility: hidden;
+  cursor: default;
+  opacity: 0.48;
 }
 
 .paragraph-preview {
@@ -466,8 +467,35 @@ h2 {
   white-space: normal;
 }
 
+.visual-page-flow {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  column-width: auto;
+  column-gap: 56px;
+  column-fill: auto;
+  scroll-behavior: auto;
+}
+
+.visual-page-flow > .epub-fragment-page {
+  max-height: none;
+}
+
+.chapter-paragraph {
+  display: block;
+}
+
 .paragraph-preview .epub-fragment {
   max-width: 100%;
+}
+
+.paragraph-preview .epub-fragment .roundsolid,
+.paragraph-preview .epub-fragment .solidtb,
+.paragraph-preview .epub-fragment .solidorange,
+.paragraph-preview .epub-fragment img,
+.paragraph-preview .epub-fragment table {
+  break-inside: avoid;
 }
 
 .paragraph-preview .epub-fragment p,
@@ -498,8 +526,27 @@ h2 {
 }
 
 .sentence {
+  display: inline;
   border-radius: 5px;
   padding: 0 2px;
+}
+
+.sentence.sentence-keep-together {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+  break-inside: avoid-column;
+  vertical-align: top;
+}
+
+.sentence-width-probe {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  visibility: hidden;
 }
 
 .sentence.timed {
@@ -513,6 +560,16 @@ h2 {
 .sentence.timed.active {
   background: #f8d889;
   box-shadow: 0 0 0 3px rgba(248, 216, 137, 0.45);
+}
+
+.pagination-measurer {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  box-sizing: border-box;
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout paint style;
 }
 
 .progress-row {
