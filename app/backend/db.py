@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS reading_progress (
   chapter_index INTEGER NOT NULL,
   paragraph_index INTEGER NOT NULL,
   audio_position_ms INTEGER NOT NULL DEFAULT 0,
+  has_playback_position INTEGER NOT NULL DEFAULT 0,
+  reading_chapter_index INTEGER,
+  reading_paragraph_index INTEGER,
+  reading_sentence_index INTEGER,
+  reading_page_offset INTEGER NOT NULL DEFAULT 0,
   voice TEXT NOT NULL,
   rate TEXT NOT NULL,
   volume TEXT NOT NULL,
@@ -97,12 +102,20 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
 
 def init_db(db_path: Path = DB_PATH) -> None:
     ensure_dirs()
-    with sqlite3.connect(db_path) as conn:
+    conn = sqlite3.connect(db_path)
+    try:
         conn.executescript(SCHEMA)
         _ensure_column(conn, "books", "epub_css", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "paragraphs", "html", "TEXT")
         _ensure_column(conn, "paragraphs", "is_audio", "INTEGER NOT NULL DEFAULT 1")
+        _ensure_column(conn, "reading_progress", "has_playback_position", "INTEGER NOT NULL DEFAULT 1")
+        _ensure_column(conn, "reading_progress", "reading_chapter_index", "INTEGER")
+        _ensure_column(conn, "reading_progress", "reading_paragraph_index", "INTEGER")
+        _ensure_column(conn, "reading_progress", "reading_sentence_index", "INTEGER")
+        _ensure_column(conn, "reading_progress", "reading_page_offset", "INTEGER NOT NULL DEFAULT 0")
         conn.commit()
+    finally:
+        conn.close()
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

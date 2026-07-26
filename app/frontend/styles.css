@@ -64,43 +64,77 @@ button:disabled {
 }
 
 .shell {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  position: relative;
   height: 100vh;
   min-height: 0;
   overflow: hidden;
 }
 
 .library {
+  position: fixed;
+  z-index: 40;
+  inset: 0 auto 0 0;
+  width: min(360px, calc(100vw - 24px));
   border-right: 1px solid var(--line);
   background: rgba(255, 250, 240, 0.92);
   padding: 24px;
   height: 100vh;
   overflow: auto;
-  transition: padding 0.2s ease;
-}
-
-.shell.library-collapsed {
-  grid-template-columns: 74px minmax(0, 1fr);
+  box-shadow: var(--shadow);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
 }
 
 .shell.library-collapsed .library {
-  padding: 18px 12px;
+  transform: translateX(calc(-100% - 24px));
 }
 
-.shell.library-collapsed .brand {
-  display: grid;
-  justify-items: center;
+.library-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(25, 23, 18, 0.22);
 }
 
-.shell.library-collapsed .brand h1,
-.shell.library-collapsed .brand .eyebrow,
-.shell.library-collapsed .library-body {
+.library-trigger {
+  flex: 0 0 auto;
+  width: 42px;
+  min-height: 40px;
+  padding: 0;
+  border-color: rgba(15, 118, 110, 0.34);
+  background: rgba(255, 253, 246, 0.72);
+  color: var(--accent-dark);
+  box-shadow: 0 5px 16px rgba(38, 32, 22, 0.08);
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.library-trigger:hover {
+  background: #dff4ee;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.library-trigger svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.library-backdrop[hidden] {
   display: none;
-}
-
-.shell.library-collapsed .header-actions {
-  display: grid;
 }
 
 .brand {
@@ -609,15 +643,13 @@ h2 {
 }
 
 @media (max-width: 900px) {
-  .shell,
   .player-header,
   .workbench {
     grid-template-columns: 1fr;
   }
 
   .library {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    width: min(92vw, 360px);
   }
 
   .settings,
@@ -631,11 +663,4 @@ h2 {
     width: calc(100vw - 40px);
   }
 
-  .shell.library-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  .shell.library-collapsed .library {
-    min-height: 72px;
-  }
 }

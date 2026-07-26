@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>本地听书</title>
-    <link rel="stylesheet" href="./styles.css?v=20260621-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260726-1" />
     <style id="epubStyle"></style>
   </head>
   <body>
-    <main class="shell">
-      <aside class="library">
+    <main class="shell library-collapsed">
+      <aside id="libraryPanel" class="library" aria-hidden="true">
         <div class="brand">
           <div>
             <p class="eyebrow">Local Audiobook</p>
@@ -36,11 +36,33 @@
         </div>
       </aside>
 
+      <button
+        id="libraryBackdrop"
+        class="library-backdrop"
+        type="button"
+        aria-label="关闭书库"
+        hidden
+      ></button>
+
       <section class="player">
         <header class="player-header">
           <div>
             <p id="statusText" class="eyebrow">请选择或导入一本书</p>
             <div class="title-row">
+              <button
+                id="openLibrary"
+                class="library-trigger"
+                type="button"
+                title="打开书库"
+                aria-label="打开书库"
+                aria-controls="libraryPanel"
+                aria-expanded="false"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h5v17H7a2.5 2.5 0 0 0-2.5 2V5.5Z"></path>
+                  <path d="M19.5 5.5A2.5 2.5 0 0 0 17 3h-5v17h5a2.5 2.5 0 0 1 2.5 2V5.5Z"></path>
+                </svg>
+              </button>
               <h2 id="bookTitle">未选择书籍</h2>
             </div>
             <p id="chapterTitle" class="chapter-title">章节会显示在这里</p>
@@ -97,6 +119,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260720-2"></script>
+    <script src="./app.js?v=20260726-1"></script>
   </body>
 </html>

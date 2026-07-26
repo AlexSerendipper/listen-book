@@ -409,6 +409,11 @@ def get_progress(book_id: str) -> dict:
         "chapter_index": 0,
         "paragraph_index": 0,
         "audio_position_ms": 0,
+        "has_playback_position": 0,
+        "reading_chapter_index": 0,
+        "reading_paragraph_index": 0,
+        "reading_sentence_index": None,
+        "reading_page_offset": 0,
         "voice": DEFAULT_VOICE,
         "rate": DEFAULT_RATE,
         "volume": DEFAULT_VOLUME,
@@ -428,13 +433,68 @@ def save_progress(book_id: str, payload: dict) -> dict:
     with get_db() as db:
         if not db.execute("SELECT 1 FROM books WHERE id = ?", (book_id,)).fetchone():
             raise HTTPException(status_code=404, detail="Book not found")
+        existing = db.execute(
+            "SELECT * FROM reading_progress WHERE book_id = ?", (book_id,)
+        ).fetchone()
+        if "has_playback_position" in payload:
+            has_playback_position = 1 if payload.get("has_playback_position") else 0
+        else:
+            has_playback_position = int(existing["has_playback_position"] if existing else 0)
+        reading_chapter_index = int(
+            payload.get(
+                "reading_chapter_index",
+                existing["reading_chapter_index"]
+                if existing and existing["reading_chapter_index"] is not None
+                else chapter_index,
+            )
+        )
+        reading_paragraph_index = int(
+            payload.get(
+                "reading_paragraph_index",
+                existing["reading_paragraph_index"]
+                if existing and existing["reading_paragraph_index"] is not None
+                else paragraph_index,
+            )
+        )
+        reading_sentence_value = payload.get(
+            "reading_sentence_index",
+            existing["reading_sentence_index"] if existing else None,
+        )
+        reading_sentence_index = (
+            int(reading_sentence_value) if reading_sentence_value is not None else None
+        )
+        reading_page_offset = max(
+            0,
+            int(
+                payload.get(
+                    "reading_page_offset",
+                    existing["reading_page_offset"] if existing else 0,
+                )
+            ),
+        )
         db.execute(
             """
             INSERT OR REPLACE INTO reading_progress
-            (book_id, chapter_index, paragraph_index, audio_position_ms, voice, rate, volume, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (book_id, chapter_index, paragraph_index, audio_position_ms, has_playback_position,
+             reading_chapter_index, reading_paragraph_index, reading_sentence_index,
+             reading_page_offset, voice, rate, volume, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (book_id, chapter_index, paragraph_index, audio_position_ms, voice, rate, volume, now),
+            (
+                book_id,
+                chapter_index,
+                paragraph_index,
+                audio_position_ms,
+                has_playback_position,
+                reading_chapter_index,
+                reading_paragraph_index,
+                reading_sentence_index,
+                reading_page_offset,
+                voice,
+                rate,
+                volume,
+                now,
+            ),
         )
     return get_progress(book_id)
 
