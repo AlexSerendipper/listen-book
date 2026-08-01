@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+    <meta name="theme-color" content="#f1eadc" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="随身书页" />
+    <title>随身书页</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/app-icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
+  </head>
+  <body>
+    <div class="paper-grain" aria-hidden="true"></div>
+    <main id="app" class="app-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">LISTEN BOOK · MOBILE · v8</p>
+          <h1>随身书页</h1>
+        </div>
+        <span id="connectionBadge" class="status-pill" role="status">离线可读</span>
+      </header>
+
+      <section id="pairView" class="panel pair-panel" hidden>
+        <p class="section-number">01 / 配对</p>
+        <h2>把这一页留在手机里</h2>
+        <p class="lede">请从 Safari 添加到主屏幕，再从主屏幕打开并输入电脑显示的十位短码。</p>
+        <form id="pairForm">
+          <label for="pairCode">一次性短码</label>
+          <input id="pairCode" name="pairCode" inputmode="text" autocomplete="one-time-code" maxlength="12" placeholder="AB12 CD34 EF" required />
+          <button class="primary-button" type="submit">连接我的书库</button>
+        </form>
+        <p id="pairStatus" class="inline-status" aria-live="polite"></p>
+      </section>
+
+      <section id="libraryView" class="library-view" hidden>
+        <div class="library-heading">
+          <div>
+            <p class="section-number">02 / 书库</p>
+            <h2>今天读哪一本？</h2>
+          </div>
+          <button id="refreshButton" class="text-button" type="button">刷新电脑书库</button>
+        </div>
+        <div id="storageNote" class="storage-note"></div>
+        <div id="bookList" class="book-list" aria-live="polite"></div>
+        <p id="emptyLibrary" class="empty-state" hidden>还没有离线书籍。连接电脑后刷新书库。</p>
+      </section>
+
+      <section id="readerView" class="reader-view" hidden aria-label="阅读器">
+        <header class="reader-header">
+          <button id="closeReader" class="icon-button" aria-label="返回书库">←</button>
+          <div class="reader-title-wrap">
+            <strong id="readerTitle"></strong>
+            <span id="chapterTitle"></span>
+          </div>
+          <button id="readerMenuButton" class="icon-button" aria-label="阅读设置">Aa</button>
+        </header>
+        <div id="readerPages" class="reader-pages">
+          <article id="readerContent" class="reader-content"></article>
+        </div>
+        <div class="reader-swipe-controls">
+          <button id="previousPage" type="button">上一页</button>
+          <span id="pageIndicator" aria-live="polite">第 1/1 章 · 1/1 页</span>
+          <button id="nextPage" type="button">下一页</button>
+        </div>
+        <aside id="readerMenu" class="reader-menu" hidden>
+          <div class="menu-row">
+            <button id="fontSmaller" type="button">字小</button>
+            <button id="fontLarger" type="button">字大</button>
+          </div>
+          <div class="sync-actions">
+            <button id="pushProgress" type="button">手机进度 → 电脑</button>
+            <button id="pullProgress" type="button">电脑进度 → 手机</button>
+          </div>
+          <p id="syncStatus" class="inline-status" aria-live="polite"></p>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="./src/app.js?v=8"></script>
+  </body>
+</html>

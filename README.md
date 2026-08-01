@@ -69,6 +69,59 @@ py -m venv .venv
 
 不要直接依赖系统里的 `python` 命令；在这台 Windows 环境中，`python` 可能指向 WindowsApps 占位程序。优先使用项目里的 `.\.venv\Scripts\python.exe`。
 
+## Mobile PWA（M0）
+
+Mobile PWA 是独立的离线文字阅读模块，不包含朗读、音频下载或播放设置同步。Windows 仍是主书库。
+
+当前 M0 已支持：
+
+- iPhone 主屏 PWA 内短码配对和单设备凭证
+- 本机配对管理页查看和撤销已登记 iPhone
+- Tailnet 内浏览电脑书库并下载 EPUB 正文与图片
+- 飞行模式启动、阅读、翻页和本地进度恢复
+- 左滑或点击正文右半屏进入下一页，右滑或点击正文左半屏返回上一页
+- 长按选择文字；长按、拖动、链接和图片不会误触翻页
+- 适配手机宽度的 EPUB 流式排版，不复用桌面固定宽度或视觉页码
+- 默认只显示“主书名＋版本”的单开手风琴书库；展开后显示作者、格式、离线状态和操作按钮
+- 手机标题显示“主书名＋版本”，作者从 EPUB 元数据读取；原始完整标题仍保留在电脑数据库
+- 按 iPhone 端实际翻页时间倒序排列，未读书随后按书名排序
+- 手机阅读器 `Aa` 菜单内执行单本`电脑进度 → 手机`或`手机进度 → 电脑`
+
+跨设备只覆盖文字阅读位置，不修改电脑端音频播放位置、声音、倍速或音量。电脑端主动推送、全量同步、覆盖预览和撤销仍属于后续完整 MVP。
+
+服务启动后，本机配对管理页位于：
+
+```text
+http://127.0.0.1:8765/mobile-admin/
+```
+
+首次配置 Tailnet 私有 HTTPS：
+
+```powershell
+cd D:\CodexProject\listen-book
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\configure_mobile_access.ps1
+```
+
+脚本只允许 `/mobile/` 和 `/api/mobile/`，不会启用 Funnel 或暴露整个 `8765` 端口；如果检测到既有 Serve 规则、移动服务未启动或桌面路由可从 Tailnet 访问，会停止或回滚本产品映射。撤销本产品映射：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\scripts\configure_mobile_access.ps1 -Remove
+```
+
+在 iPhone Safari 打开脚本输出的 `/mobile/` 私有 HTTPS 地址，添加到主屏幕，再从主屏幕打开。短码只能在主屏 PWA 中提交。
+
+基本使用流程：
+
+1. 在电脑打开 `http://127.0.0.1:8765/mobile-admin/`，生成一次性短码并确认 iPhone。
+2. iPhone 从主屏幕打开 PWA，刷新电脑书库。
+3. 点击书名展开详情，点击`下载`；完成后留在列表，按钮变为`继续阅读`。
+4. 阅读时使用左右滑动或正文左右半屏短按翻页；右上角 `Aa` 提供字号和单本进度同步。
+5. 从电脑拉取进度时，先在电脑阅读并保存位置，再让 iPhone PWA 保持前台，打开同一本书并点击`电脑进度 → 手机`。
+
+已登记设备也在配对管理页中显示。点击`撤销`后，手机仍可阅读既有离线书籍，但必须重新配对才能下载或同步。
+
+PWA 更新后请从多任务界面彻底关闭并重新打开；顶部版本仍未变化时，保持联网等待约 5 秒后再关闭并打开一次。不要清除 Safari 网站数据，否则会删除手机离线书籍和本地进度。
+
 ## 本地数据
 
 以下数据只保存在本机，不会提交到 Git：
@@ -86,6 +139,7 @@ app/logs/
 - `app/data/books/` 保存通过网页上传导入的书籍副本
 - `app/cache/audio/` 保存生成过的 mp3
 - `app/logs/` 保存本地服务日志
+- iPhone 的离线书籍、设备凭证和文字进度保存在 PWA 的 IndexedDB 与 Cache Storage 中，不写入 Git
 
 ## 常见问题
 
@@ -144,6 +198,8 @@ http://127.0.0.1:8765
 .\.venv\Scripts\python.exe -m compileall app tests
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 node --check app\frontend\app.js
+node tests\mobile_frontend\test_anchor.mjs
+node tools\test_mobile_pwa_playwright.mjs
 ```
 
 ## 目录结构
@@ -152,14 +208,19 @@ node --check app\frontend\app.js
 app/
   backend/   FastAPI 后端、SQLite、书籍解析、TTS 缓存
   frontend/  浏览器界面
+  mobile/    iPhone PWA、离线阅读器、IndexedDB 和 Service Worker
+  mobile_admin/  本机配对管理页
   data/      本地数据库和上传书籍，Git 忽略
   cache/     本地音频缓存，Git 忽略
   logs/      本地服务日志，Git 忽略
 docs/
   reader-requirements.md  阅读器分页、布局、播放跟随等长期产品约束
+  mobile-pwa-prd.md  Mobile PWA 产品范围、规则与验收标准
+  mobile-pwa-technical-design.md  Mobile PWA 架构、协议、迁移与测试方案
 scripts/
   start_listen_book.ps1
   create_desktop_shortcut.ps1
+  configure_mobile_access.ps1
 tests/
 ```
 

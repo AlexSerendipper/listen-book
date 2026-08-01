@@ -11,6 +11,7 @@ from app.backend.book_parser import (
     _scope_epub_css,
     chunk_paragraphs,
     chunk_chapter,
+    epub_metadata_author,
     Paragraph,
     parse_md,
     parse_txt,
@@ -18,6 +19,15 @@ from app.backend.book_parser import (
 
 
 class BookParserTests(unittest.TestCase):
+    def test_epub_author_prefers_author_role_and_deduplicates(self) -> None:
+        authors = epub_metadata_author([
+            ("本杰明·格雷厄姆", {"{opf}role": "aut"}),
+            ("本杰明·格雷厄姆", {"{opf}role": "aut"}),
+            ("某译者", {"{opf}role": "trl"}),
+        ])
+
+        self.assertEqual(authors, "本杰明·格雷厄姆")
+
     def test_parse_md_uses_headings(self) -> None:
         chapters = parse_md("# 第一章\n正文一\n\n## 第二章\n正文二")
         self.assertEqual([chapter.title for chapter in chapters], ["第一章", "第二章"])

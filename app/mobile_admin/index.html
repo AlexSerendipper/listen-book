@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>连接手机 · Listen Book</title>
+    <link rel="icon" href="/mobile/icons/app-icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <p>LISTEN BOOK / LOCAL CONTROL</p>
+        <h1>连接手机</h1>
+        <a href="/app/">返回桌面阅读器</a>
+      </header>
+      <section>
+        <span class="step">步骤 1</span>
+        <h2>在 iPhone 打开移动地址</h2>
+        <p>请使用配置脚本输出的 Tailnet 私有 HTTPS 地址，并在末尾打开 <code>/mobile/</code>。从 Safari 添加到主屏幕后，再从主屏幕启动。</p>
+      </section>
+      <section>
+        <span class="step">步骤 2</span>
+        <h2>生成一次性短码</h2>
+        <button id="startPair" class="primary">生成 5 分钟短码</button>
+        <div id="codeBox" class="code-box" hidden>
+          <strong id="shortCode"></strong>
+          <span>只在手机主屏 PWA 内输入</span>
+        </div>
+        <div id="pending" class="pending" hidden>
+          <p>待确认设备：<strong id="deviceName"></strong></p>
+          <button id="confirmPair" class="primary">确认连接这部 iPhone</button>
+        </div>
+        <p id="status" aria-live="polite"></p>
+      </section>
+      <section>
+        <span class="step">设备</span>
+        <h2>已登记的手机</h2>
+        <div id="devices"></div>
+      </section>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

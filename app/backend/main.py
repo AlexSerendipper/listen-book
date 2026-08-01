@@ -5,6 +5,7 @@ import threading
 import time
 import uuid
 import webbrowser
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +29,10 @@ from .config import (
     ensure_dirs,
 )
 from .db import get_db, init_db, row_to_dict, utc_now
+from .mobile.catalog import content_sha256
+from .mobile.constants import ANCHOR_VERSION, PARSER_VERSION
+from .mobile.progress import anchor_text_hash
+from .mobile.routes import install_mobile
 from .tts import audio_path, generate_audio_with_sentence_timings
 
 
@@ -238,27 +243,42 @@ async def import_book(
     title = parsed.title
     chapters = parsed.chapters
     stat = path.stat()
+    content_hash = content_sha256(path)
     now = utc_now()
 
     with get_db() as db:
         existing = db.execute("SELECT created_at FROM books WHERE id = ?", (book_id,)).fetchone()
         db.execute(
             """
-            INSERT OR REPLACE INTO books
-            (id, file_path, title, author, epub_css, file_format, file_size, file_mtime, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO books
+            (id, file_path, title, author, epub_css, file_format, file_size, file_mtime,
+             created_at, updated_at, content_hash, parser_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              file_path = excluded.file_path,
+              title = excluded.title,
+              author = excluded.author,
+              epub_css = excluded.epub_css,
+              file_format = excluded.file_format,
+              file_size = excluded.file_size,
+              file_mtime = excluded.file_mtime,
+              updated_at = excluded.updated_at,
+              content_hash = excluded.content_hash,
+              parser_version = excluded.parser_version
             """,
             (
                 book_id,
                 str(path),
                 title,
-                None,
+                parsed.author,
                 parsed.epub_css,
                 suffix.lstrip("."),
                 stat.st_size,
                 int(stat.st_mtime),
                 existing["created_at"] if existing else now,
                 now,
+                content_hash,
+                PARSER_VERSION,
             ),
         )
         db.execute("DELETE FROM chapters WHERE book_id = ?", (book_id,))
@@ -472,13 +492,75 @@ def save_progress(book_id: str, payload: dict) -> dict:
                 )
             ),
         )
+        reading_changed = (
+            not existing
+            or reading_chapter_index != existing["reading_chapter_index"]
+            or reading_paragraph_index != existing["reading_paragraph_index"]
+            or reading_sentence_index != existing["reading_sentence_index"]
+            or reading_page_offset != existing["reading_page_offset"]
+        )
+        reading_character_offset = existing["reading_character_offset"] if existing else None
+        reading_anchor_text_hash = existing["reading_anchor_text_hash"] if existing else None
+        reading_parser_version = existing["reading_parser_version"] if existing else None
+        reading_anchor_version = existing["reading_anchor_version"] if existing else ANCHOR_VERSION
+        reading_updated_at = existing["reading_updated_at"] if existing else None
+        reading_revision = int(existing["reading_revision"] or 0) if existing else 0
+        if reading_changed:
+            paragraph = db.execute(
+                """
+                SELECT text FROM paragraphs
+                WHERE book_id = ? AND chapter_index = ? AND paragraph_index = ?
+                """,
+                (book_id, reading_chapter_index, reading_paragraph_index),
+            ).fetchone()
+            if paragraph:
+                sentence_offsets = [
+                    match.start()
+                    for match in re.finditer(r"[^。！？；!?;]+[。！？；!?;]?\s*", paragraph["text"] or "")
+                    if match.group(0).strip()
+                ]
+                reading_character_offset = (
+                    sentence_offsets[reading_sentence_index]
+                    if reading_sentence_index is not None
+                    and 0 <= reading_sentence_index < len(sentence_offsets)
+                    else 0
+                )
+                reading_anchor_text_hash = anchor_text_hash(
+                    paragraph["text"] or "", reading_character_offset
+                )
+                reading_parser_version = PARSER_VERSION
+                reading_anchor_version = ANCHOR_VERSION
+                reading_updated_at = now
+                reading_revision += 1
         db.execute(
             """
-            INSERT OR REPLACE INTO reading_progress
+            INSERT INTO reading_progress
             (book_id, chapter_index, paragraph_index, audio_position_ms, has_playback_position,
              reading_chapter_index, reading_paragraph_index, reading_sentence_index,
-             reading_page_offset, voice, rate, volume, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             reading_page_offset, voice, rate, volume, updated_at,
+             reading_character_offset, reading_anchor_text_hash, reading_anchor_asset_id,
+             reading_parser_version, reading_anchor_version, reading_updated_at, reading_revision)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(book_id) DO UPDATE SET
+              chapter_index = excluded.chapter_index,
+              paragraph_index = excluded.paragraph_index,
+              audio_position_ms = excluded.audio_position_ms,
+              has_playback_position = excluded.has_playback_position,
+              reading_chapter_index = excluded.reading_chapter_index,
+              reading_paragraph_index = excluded.reading_paragraph_index,
+              reading_sentence_index = excluded.reading_sentence_index,
+              reading_page_offset = excluded.reading_page_offset,
+              voice = excluded.voice,
+              rate = excluded.rate,
+              volume = excluded.volume,
+              updated_at = excluded.updated_at,
+              reading_character_offset = excluded.reading_character_offset,
+              reading_anchor_text_hash = excluded.reading_anchor_text_hash,
+              reading_anchor_asset_id = excluded.reading_anchor_asset_id,
+              reading_parser_version = excluded.reading_parser_version,
+              reading_anchor_version = excluded.reading_anchor_version,
+              reading_updated_at = excluded.reading_updated_at,
+              reading_revision = excluded.reading_revision
             """,
             (
                 book_id,
@@ -494,6 +576,13 @@ def save_progress(book_id: str, payload: dict) -> dict:
                 rate,
                 volume,
                 now,
+                reading_character_offset,
+                reading_anchor_text_hash,
+                existing["reading_anchor_asset_id"] if existing else None,
+                reading_parser_version,
+                reading_anchor_version,
+                reading_updated_at,
+                reading_revision,
             ),
         )
     return get_progress(book_id)
@@ -679,6 +768,8 @@ async def _resolve_import_path(file_path: str | None, file: UploadFile | None) -
 
     raise HTTPException(status_code=400, detail="Provide a file upload or file_path")
 
+
+install_mobile(app)
 
 if FRONTEND_DIR.exists():
     app.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

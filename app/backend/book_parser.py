@@ -28,6 +28,7 @@ class ParsedBook:
     title: str
     chapters: list[Chapter]
     epub_css: str = ""
+    author: str | None = None
 
 
 def sha1_text(value: str) -> str:
@@ -116,6 +117,7 @@ def parse_epub(path: Path, book_id: str | None = None, assets_dir: Path | None =
     metadata_title = book.get_metadata("DC", "title")
     if metadata_title and metadata_title[0][0]:
         title = str(metadata_title[0][0])
+    author = epub_metadata_author(book.get_metadata("DC", "creator"))
 
     spine_items = _epub_spine_documents(book)
     if book.toc:
@@ -136,7 +138,40 @@ def parse_epub(path: Path, book_id: str | None = None, assets_dir: Path | None =
         _scope_epub_css(item.get_content().decode("utf-8", errors="replace"))
         for item in book.get_items_of_type(ITEM_STYLE)
     )
-    return ParsedBook(title, _non_empty_chapters(chapters) or [Chapter(title, "")], css)
+    return ParsedBook(
+        title,
+        _non_empty_chapters(chapters) or [Chapter(title, "")],
+        epub_css=css,
+        author=author,
+    )
+
+
+def epub_metadata_author(entries: list[tuple[str, dict]]) -> str | None:
+    authors: list[str] = []
+    fallback: list[str] = []
+    for value, attributes in entries:
+        name = str(value).strip()
+        if not name:
+            continue
+        role = next(
+            (str(item).lower() for key, item in attributes.items() if str(key).endswith("role")),
+            "",
+        )
+        if name not in fallback:
+            fallback.append(name)
+        if role in ("", "aut", "author") and name not in authors:
+            authors.append(name)
+    selected = authors or fallback
+    return "、".join(selected) if selected else None
+
+
+def read_epub_author(path: Path) -> str | None:
+    try:
+        from ebooklib import epub
+    except ImportError as exc:
+        raise RuntimeError("EPUB support requires ebooklib.") from exc
+    book = epub.read_epub(str(path))
+    return epub_metadata_author(book.get_metadata("DC", "creator"))
 
 
 def chunk_chapter(text: str, min_len: int = 420, max_len: int = 620) -> list[Paragraph]:

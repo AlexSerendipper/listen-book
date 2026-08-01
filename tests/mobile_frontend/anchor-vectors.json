@@ -1,0 +1,27 @@
+[
+  {
+    "text": "中文段落。下一句。",
+    "offset": 3,
+    "sha256": "9b545141fbba0b24a570f43e5b2f48f3df9cf74ea42b50d1851103b7337f4411"
+  },
+  {
+    "text": "第一行\r\n第二行",
+    "offset": 4,
+    "sha256": "61f8655a9b219b9ce122c6c7cd59ad09feac38240699cfec8d0c9b1e81a748ab"
+  },
+  {
+    "text": "Café 与 café",
+    "offset": 2,
+    "sha256": "18c80941f87c30f8247c0714156f7ec0ab2883d49240154dfd0e0e0740b10054"
+  },
+  {
+    "text": "家人👨‍👩‍👧‍👦一起读书📖",
+    "offset": 3,
+    "sha256": "22ee5a433cf4169e002de94c7dc3303ba981dacfd22b2492ee9ea4032bb4e9f7"
+  },
+  {
+    "text": "重复文字重复文字重复文字",
+    "offset": 5,
+    "sha256": "4230b85bc83d15c0c89867a4450ff47a3ee3115f4f59b1687da504e2155b858b"
+  }
+]

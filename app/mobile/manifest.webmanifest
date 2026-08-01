@@ -1,0 +1,19 @@
+{
+  "name": "Listen Book 随身书页",
+  "short_name": "随身书页",
+  "description": "Windows Listen Book 的离线文字阅读伴侣",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "background_color": "#f1eadc",
+  "theme_color": "#f1eadc",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/mobile/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
