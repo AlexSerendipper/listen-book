@@ -11,14 +11,14 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/app-icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <div class="paper-grain" aria-hidden="true"></div>
     <main id="app" class="app-shell">
       <header class="masthead">
         <div>
-          <p class="eyebrow">LISTEN BOOK · MOBILE · v8</p>
+          <p class="eyebrow">LISTEN BOOK · MOBILE · v9</p>
           <h1>随身书页</h1>
         </div>
         <span id="connectionBadge" class="status-pill" role="status">离线可读</span>
@@ -56,7 +56,7 @@
             <strong id="readerTitle"></strong>
             <span id="chapterTitle"></span>
           </div>
-          <button id="readerMenuButton" class="icon-button" aria-label="阅读设置">Aa</button>
+          <span class="reader-header-spacer" aria-hidden="true"></span>
         </header>
         <div id="readerPages" class="reader-pages">
           <article id="readerContent" class="reader-content"></article>
@@ -66,19 +66,46 @@
           <span id="pageIndicator" aria-live="polite">第 1/1 章 · 1/1 页</span>
           <button id="nextPage" type="button">下一页</button>
         </div>
-        <aside id="readerMenu" class="reader-menu" hidden>
-          <div class="menu-row">
-            <button id="fontSmaller" type="button">字小</button>
-            <button id="fontLarger" type="button">字大</button>
-          </div>
-          <div class="sync-actions">
-            <button id="pushProgress" type="button">手机进度 → 电脑</button>
-            <button id="pullProgress" type="button">电脑进度 → 手机</button>
-          </div>
-          <p id="syncStatus" class="inline-status" aria-live="polite"></p>
-        </aside>
+        <div id="readerMenuLayer" class="reader-menu-layer" hidden>
+          <button id="readerMenuBackdrop" class="reader-menu-backdrop" type="button" aria-label="返回上一级或关闭阅读菜单"></button>
+          <aside id="readerMenu" class="reader-menu" aria-label="阅读菜单">
+            <section data-menu-panel="root">
+              <p class="reader-menu-kicker">阅读菜单</p>
+              <div class="reader-menu-choices">
+                <button type="button" data-menu-target="font"><span aria-hidden="true">Aa</span>字体</button>
+                <button type="button" data-menu-target="sync"><span aria-hidden="true">⇄</span>同步</button>
+                <button type="button" data-menu-target="chapters"><span aria-hidden="true">☰</span>目录</button>
+              </div>
+            </section>
+
+            <section data-menu-panel="font" hidden>
+              <p class="reader-menu-kicker">字体</p>
+              <div class="menu-row">
+                <button id="fontSmaller" type="button">字小</button>
+                <button id="fontLarger" type="button">字大</button>
+              </div>
+            </section>
+
+            <section data-menu-panel="sync" hidden>
+              <p class="reader-menu-kicker">同步文字进度</p>
+              <div class="sync-actions">
+                <button id="pushProgress" type="button">手机进度 → 电脑</button>
+                <button id="pullProgress" type="button">电脑进度 → 手机</button>
+              </div>
+              <p id="syncStatus" class="inline-status" aria-live="polite"></p>
+            </section>
+
+            <section data-menu-panel="chapters" hidden>
+              <div class="reader-menu-heading">
+                <p class="reader-menu-kicker">目录</p>
+                <span id="readerChapterCount" class="reader-chapter-count"></span>
+              </div>
+              <div id="readerChapterList" class="reader-chapter-list" aria-label="章节列表"></div>
+            </section>
+          </aside>
+        </div>
       </section>
     </main>
-    <script type="module" src="./src/app.js?v=8"></script>
+    <script type="module" src="./src/app.js?v=9"></script>
   </body>
 </html>

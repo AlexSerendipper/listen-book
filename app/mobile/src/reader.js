@@ -1,9 +1,9 @@
-import { getRecord, markBookRead, saveLocalProgress } from "./db.js?v=8";
-import { createTextAnchor } from "./anchor.js?v=8";
+import { getRecord, markBookRead, saveLocalProgress } from "./db.js?v=9";
+import { createTextAnchor } from "./anchor.js?v=9";
 
 const ASSET_CACHE = "listen-book-assets-v1";
 
-export function createReader(elements) {
+export function createReader(elements, options = {}) {
   let book;
   let packageData;
   let chapterIndex = 0;
@@ -158,6 +158,15 @@ export function createReader(elements) {
     scheduleSave();
   }
 
+  async function jumpToChapter(targetChapter) {
+    if (!packageData || !Number.isInteger(targetChapter)) return;
+    if (targetChapter < 0 || targetChapter >= packageData.chapters.length) return;
+    await savePosition();
+    await renderChapter(targetChapter);
+    await markBookRead(book.content_hash);
+    scheduleSave();
+  }
+
   async function close() {
     if (book) await savePosition();
     releaseBlobs();
@@ -176,6 +185,10 @@ export function createReader(elements) {
   elements.previous.addEventListener("click", () => previous());
   elements.next.addEventListener("click", () => next());
   elements.pages.addEventListener("touchstart", (event) => {
+    if (options.isInteractionLocked?.()) {
+      touchStart = null;
+      return;
+    }
     if (event.touches.length !== 1) return;
     touchStart = {
       x: event.touches[0].clientX,
@@ -184,6 +197,10 @@ export function createReader(elements) {
     };
   }, { passive: true });
   elements.pages.addEventListener("touchend", (event) => {
+    if (options.isInteractionLocked?.()) {
+      touchStart = null;
+      return;
+    }
     if (!touchStart || event.changedTouches.length !== 1) return;
     const endTouch = event.changedTouches[0];
     const start = touchStart;
@@ -204,10 +221,21 @@ export function createReader(elements) {
     )) return;
     const bounds = elements.pages.getBoundingClientRect();
     if (endTouch.clientX < bounds.left || endTouch.clientX > bounds.right) return;
-    if (endTouch.clientX < bounds.left + bounds.width / 2) previous();
-    else next();
+    const relativeX = (endTouch.clientX - bounds.left) / bounds.width;
+    if (relativeX < 0.4) previous();
+    else if (relativeX > 0.6) next();
+    else options.onCenterTap?.();
   }, { passive: true });
   elements.pages.addEventListener("touchcancel", () => { touchStart = null; }, { passive: true });
 
-  return { openBook, close, relayout, savePosition, get contentHash() { return book?.content_hash; } };
+  return {
+    openBook,
+    close,
+    relayout,
+    savePosition,
+    jumpToChapter,
+    get chapters() { return packageData?.chapters || []; },
+    get currentChapterIndex() { return chapterIndex; },
+    get contentHash() { return book?.content_hash; },
+  };
 }

@@ -1,4 +1,4 @@
-import { applyRemoteProgress, commitOfflineBook, getDevice, getRecord, saveDevice } from "./db.js?v=8";
+import { applyRemoteProgress, commitOfflineBook, getDevice, getRecord, saveDevice } from "./db.js?v=9";
 
 const ASSET_CACHE = "listen-book-assets-v1";
 

@@ -1,6 +1,6 @@
-import { connectForeground, downloadBook, fetchCatalog, pairDevice, pullProgress, pushProgress, refreshOfflineBook } from "./api.js?v=8";
-import { allRecords, getDevice, openDatabase, refreshOfflineMetadata } from "./db.js?v=8";
-import { createReader } from "./reader.js?v=8";
+import { connectForeground, downloadBook, fetchCatalog, pairDevice, pullProgress, pushProgress, refreshOfflineBook } from "./api.js?v=9";
+import { allRecords, getDevice, openDatabase, refreshOfflineMetadata } from "./db.js?v=9";
+import { createReader } from "./reader.js?v=9";
 
 const elements = {
   pairView: document.querySelector("#pairView"),
@@ -21,10 +21,16 @@ const elements = {
   pageIndicator: document.querySelector("#pageIndicator"),
   previousPage: document.querySelector("#previousPage"),
   nextPage: document.querySelector("#nextPage"),
+  readerMenuLayer: document.querySelector("#readerMenuLayer"),
   readerMenu: document.querySelector("#readerMenu"),
+  readerMenuBackdrop: document.querySelector("#readerMenuBackdrop"),
+  readerMenuPanels: document.querySelectorAll("[data-menu-panel]"),
+  readerChapterList: document.querySelector("#readerChapterList"),
+  readerChapterCount: document.querySelector("#readerChapterCount"),
   syncStatus: document.querySelector("#syncStatus"),
 };
 
+let readerMenuLevel = null;
 const reader = createReader({
   view: elements.readerView,
   title: elements.readerTitle,
@@ -34,10 +40,60 @@ const reader = createReader({
   indicator: elements.pageIndicator,
   previous: elements.previousPage,
   next: elements.nextPage,
+}, {
+  onCenterTap: () => openReaderMenu("root"),
+  isInteractionLocked: () => readerMenuLevel !== null,
 });
 
 let connectionEpoch = null;
 let onlineCatalog = [];
+
+function closeReaderMenu() {
+  readerMenuLevel = null;
+  elements.readerMenuLayer.hidden = true;
+}
+
+function renderReaderChapters() {
+  const chapters = reader.chapters;
+  elements.readerChapterCount.textContent = `共 ${chapters.length} 章`;
+  elements.readerChapterList.replaceChildren();
+  chapters.forEach((chapter, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `reader-chapter-item${index === reader.currentChapterIndex ? " active" : ""}`;
+    button.dataset.chapterIndex = String(index);
+    if (index === reader.currentChapterIndex) button.setAttribute("aria-current", "location");
+    const number = document.createElement("span");
+    number.textContent = String(index + 1).padStart(2, "0");
+    const title = document.createElement("strong");
+    title.textContent = chapter.title || `第 ${index + 1} 章`;
+    button.append(number, title);
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      closeReaderMenu();
+      try {
+        await reader.jumpToChapter(index);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    elements.readerChapterList.append(button);
+  });
+}
+
+function openReaderMenu(level) {
+  readerMenuLevel = level;
+  elements.readerMenuLayer.hidden = false;
+  elements.readerMenuPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.menuPanel !== level;
+  });
+  if (level === "chapters") {
+    renderReaderChapters();
+    requestAnimationFrame(() => {
+      elements.readerChapterList.querySelector(".active")?.scrollIntoView({ block: "center" });
+    });
+  }
+}
 
 function setOnline(online) {
   elements.badge.textContent = online ? "电脑已连接" : "离线可读";
@@ -198,11 +254,16 @@ elements.pairForm.addEventListener("submit", async (event) => {
 
 elements.refresh.addEventListener("click", refreshCatalog);
 document.querySelector("#closeReader").addEventListener("click", async () => {
+  closeReaderMenu();
   await reader.close();
   await renderLibrary();
 });
-document.querySelector("#readerMenuButton").addEventListener("click", () => {
-  elements.readerMenu.hidden = !elements.readerMenu.hidden;
+elements.readerMenuBackdrop.addEventListener("click", () => {
+  if (readerMenuLevel === "root") closeReaderMenu();
+  else openReaderMenu("root");
+});
+elements.readerMenu.querySelectorAll("[data-menu-target]").forEach((button) => {
+  button.addEventListener("click", () => openReaderMenu(button.dataset.menuTarget));
 });
 document.querySelector("#fontSmaller").addEventListener("click", async () => {
   const root = document.documentElement;

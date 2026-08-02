@@ -423,6 +423,13 @@ function setLibraryCollapsed(collapsed) {
   renderPanels();
 }
 
+function closeChapterPopover() {
+  if (!state.chapterPopoverOpen) return false;
+  state.chapterPopoverOpen = false;
+  renderPanels();
+  return true;
+}
+
 function updateBackToCurrentPageButton() {
   el.backToCurrentPage.disabled = !state.bookId || !state.hasPlaybackPosition || isCurrentPlaybackVisible();
 }
@@ -1725,6 +1732,10 @@ function isEditingText(event) {
 }
 
 function handleKeyboardShortcuts(event) {
+  if (event.key === "Escape" && closeChapterPopover()) {
+    event.preventDefault();
+    return;
+  }
   if (event.key === "Escape" && !state.libraryCollapsed) {
     event.preventDefault();
     setLibraryCollapsed(true);
@@ -2029,7 +2040,15 @@ function escapeHtml(value) {
 el.refreshBooks.addEventListener("click", loadBooks);
 el.toggleLibrary.addEventListener("click", () => setLibraryCollapsed(true));
 el.openLibrary.addEventListener("click", () => setLibraryCollapsed(false));
-el.libraryBackdrop.addEventListener("click", () => setLibraryCollapsed(true));
+el.libraryBackdrop.addEventListener("click", () => {
+  if (!closeChapterPopover()) setLibraryCollapsed(true);
+});
+document.addEventListener("click", (event) => {
+  if (!state.chapterPopoverOpen) return;
+  if (el.chapterPopover.contains(event.target)) return;
+  if (event.target instanceof Element && event.target.closest('[data-action="chapters"]')) return;
+  closeChapterPopover();
+});
 el.fileInput.addEventListener("change", async () => {
   if (el.fileInput.files[0]) {
     try {

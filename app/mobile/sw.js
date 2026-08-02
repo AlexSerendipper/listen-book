@@ -1,15 +1,15 @@
-const SHELL_CACHE = "listen-book-mobile-shell-v8";
+const SHELL_CACHE = "listen-book-mobile-shell-v9";
 const SHELL = [
   "/mobile/",
   "/mobile/index.html",
-  "/mobile/styles.css?v=8",
+  "/mobile/styles.css?v=9",
   "/mobile/manifest.webmanifest",
   "/mobile/icons/app-icon.svg",
-  "/mobile/src/app.js?v=8",
-  "/mobile/src/api.js?v=8",
-  "/mobile/src/anchor.js?v=8",
-  "/mobile/src/db.js?v=8",
-  "/mobile/src/reader.js?v=8",
+  "/mobile/src/app.js?v=9",
+  "/mobile/src/api.js?v=9",
+  "/mobile/src/anchor.js?v=9",
+  "/mobile/src/db.js?v=9",
+  "/mobile/src/reader.js?v=9",
 ];
 
 self.addEventListener("install", (event) => {
