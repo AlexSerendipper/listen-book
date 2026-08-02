@@ -227,6 +227,10 @@ h2 {
   gap: 8px;
 }
 
+.book-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .book-item,
 .chapter-item {
   width: 100%;

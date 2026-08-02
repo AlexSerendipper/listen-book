@@ -233,7 +233,11 @@ function renderBooks() {
     .map(
       (book) => `
         <div class="book-row" data-id="${book.id}">
-          <button class="book-item ${book.id === state.bookId ? "active" : ""}" data-action="open">
+          <button
+            class="book-item ${book.id === state.bookId ? "active" : ""}"
+            data-action="open"
+            title="${escapeHtml(book.title || book.file_path)}"
+          >
             <strong>${escapeHtml(book.title || book.file_path)}</strong>
           </button>
           <div class="book-meta">

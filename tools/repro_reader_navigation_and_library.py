@@ -71,7 +71,11 @@ with sync_playwright() as playwright:
           const text = Array.from({ length: 180 }, (_, index) => `第${index + 1}句用于分页回归。`).join("");
           const paragraph = { paragraph_index: 0, text, html: null, is_audio: 1 };
           state.bookId = "browser-test";
-          state.books = [{ id: "browser-test", title: "Browser Test", file_format: "txt" }];
+          state.books = [{
+            id: "browser-test",
+            title: "Browser Test With A Very Long Book Title That Must Stay Inside The Library Drawer",
+            file_format: "txt",
+          }];
           state.chapters = [{ chapter_index: 0, title: "Chapter", paragraph_count: 1 }];
           state.paragraphs = [paragraph];
           state.previewParagraphs = [paragraph];
@@ -129,6 +133,17 @@ with sync_playwright() as playwright:
     opened = snapshot(page)
     assert page.locator("#libraryPanel").get_attribute("aria-hidden") == "false"
     assert page.locator("#openLibrary").get_attribute("aria-expanded") == "true"
+    library_size = page.locator("#libraryPanel").evaluate(
+        "node => ({ clientWidth: node.clientWidth, scrollWidth: node.scrollWidth })"
+    )
+    title_size = page.locator(".book-item strong").evaluate(
+        "node => ({ clientWidth: node.clientWidth, scrollWidth: node.scrollWidth })"
+    )
+    assert library_size["scrollWidth"] <= library_size["clientWidth"], library_size
+    assert title_size["scrollWidth"] > title_size["clientWidth"], title_size
+    assert page.locator(".book-item").get_attribute("title") == page.locator(
+        ".book-item strong"
+    ).text_content()
     assert opened == before, (before, opened)
 
     page.locator("#libraryBackdrop").click(position={"x": 1000, "y": 400})
